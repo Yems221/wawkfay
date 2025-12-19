@@ -1,0 +1,1327 @@
+package com.kufay.app.ui.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.kufay.app.ui.components.*
+import com.kufay.app.ui.models.NotificationDetailDialog
+import com.kufay.app.ui.viewmodels.HomeViewModel
+import com.kufay.app.data.db.entities.Notification
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import com.kufay.app.R
+import com.kufay.app.ui.models.AppType
+import java.text.SimpleDateFormat
+import java.util.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.datastore.preferences.core.stringPreferencesKey
+import com.kufay.app.data.preferences.dataStore
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.shape.CircleShape
+import java.util.Locale
+import java.text.NumberFormat
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import com.kufay.app.ui.components.BannerAd
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
+import android.content.Context
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.*
+
+
+
+// Dashboard Hero Section that displays at the top of the home screen
+@Composable
+fun DashboardHero(
+    modifier: Modifier = Modifier,
+    appColor: Color,
+    totalIncomingAmount: Double? = null,
+    incomingAmountByApp: Map<String, Double> = emptyMap(), // Pass selected date
+    dailyIncomingAmount: Double? = null,
+    onReadDailyTotal: () -> Unit, // Added parameter
+    isCollapsed: Boolean = false,
+    incomingTransactions: List<Pair<String, Double>> = emptyList() // Format: (description, amount)
+) {
+    // State variables for expanded status and amount visibility
+    var isExpanded by remember { mutableStateOf(false) }
+    var isAmountVisible by remember { mutableStateOf(false) }
+
+    // Debug state - controls visibility of the debug popup
+    var showDebugPopup by remember { mutableStateOf(false) }
+
+    // When in collapsed mode from scrolling, force the dashboard to be collapsed
+    val actuallyExpanded = isExpanded && !isCollapsed
+
+    // Transition for expandable behavior when scrolling
+    val heightTransition = updateTransition(targetState = actuallyExpanded, label = "Expansion Transition")
+
+    // Animation specs for smooth transitions
+    val heightSpec = spring<Float>(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessLow
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(appColor)
+            .clickable { isExpanded = !isExpanded }
+    ) {
+        // Title Row - Only visible when not collapsed
+        AnimatedVisibility(
+            visible = !isCollapsed,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Text(
+                text = "Ku la fay ?",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 16.dp, top = 5.dp, end = 16.dp, bottom = 8.dp)
+            )
+        }
+
+        // Total Amount Row - Always visible, but formatted based on collapse state
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = if (isCollapsed) 8.dp else 0.dp,
+                    bottom = if (actuallyExpanded) 8.dp else if (isCollapsed) 8.dp else 16.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Icon and Label
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowDownward,
+                    contentDescription = "Incoming",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(if (isCollapsed) 20.dp else 24.dp)
+                        .background(
+                            color = Color.White.copy(alpha = 0.3f),
+                            shape = CircleShape
+                        )
+                        .padding(if (isCollapsed) 3.dp else 4.dp)
+                )
+
+                // Keep the font size consistent for "Total Reçu Aujourd'hui"
+                Text(
+                    text = "Total Reçu \n Aujourd'hui",
+                    style = MaterialTheme.typography.titleMedium, // Consistent font size regardless of collapsed state
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+
+            // Play button, Amount, Debug Button and Visibility Toggle
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Add Play button for TTS
+                IconButton(
+                    onClick = onReadDailyTotal,
+                    modifier = Modifier.size(if (isCollapsed) 24.dp else 28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Read Total du Jour",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(if (isCollapsed) 20.dp else 24.dp)
+                            .background(
+                                color = Color.White.copy(alpha = 0.3f),
+                                shape = CircleShape
+                            )
+                            .padding(if (isCollapsed) 3.dp else 4.dp)
+                    )
+                }
+
+                // Display amount or stars based on visibility - use a consistent size for amounts
+                val formattedTotalAmount = dailyIncomingAmount?.let {
+                    formatAmount(it)
+                } ?: "0 Franc CFA"
+
+                // Make sure there's enough space for large amounts
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp)
+                        .widthIn(min = 100.dp) // Ensure minimum width for large numbers
+                ) {
+                    Text(
+                        text = if (isAmountVisible) formattedTotalAmount else "*****",
+                        style = MaterialTheme.typography.bodyMedium, // Consistent font size
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Visible // Allow text to be fully visible
+                    )
+                }
+
+                // Debug button - small icon to open the amounts popup
+                if (!isCollapsed) {
+                    IconButton(
+                        onClick = { showDebugPopup = true },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BugReport,
+                            contentDescription = "Debug Amounts",
+                            tint = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                // Eye toggle button
+                IconButton(
+                    onClick = { isAmountVisible = !isAmountVisible },
+                    modifier = Modifier.size(if (isCollapsed) 24.dp else 28.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isAmountVisible) Icons.Default.Visibility else Icons.Outlined.VisibilityOff,
+                        contentDescription = if (isAmountVisible) "Hide Amount" else "Show Amount",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+
+        // Rest of the component remains the same...
+        // Expandable Content
+        AnimatedVisibility(
+            visible = actuallyExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                // By app breakdown
+                if (incomingAmountByApp.isNotEmpty()) {
+                    Divider(
+                        color = Color.White.copy(alpha = 0.3f),
+                        thickness = 1.dp,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+
+                    Text(
+                        text = "Par Application",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+
+                    // Table-like layout for app breakdown
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.White.copy(alpha = 0.1f))
+                    ) {
+                        // List app breakdowns
+                        incomingAmountByApp.forEach { (packageName, amount) ->
+                            val appName = getAppNameFromPackage(packageName, "")
+                            val formattedAmount = formatAmount(amount)
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp, horizontal = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = appName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Normal
+                                )
+
+                                Text(
+                                    text = if (isAmountVisible) formattedAmount else "*****",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.End
+                                )
+                            }
+
+                            // Add divider between items (except after the last one)
+                            if (packageName != incomingAmountByApp.keys.last()) {
+                                Divider(
+                                    color = Color.White.copy(alpha = 0.1f),
+                                    thickness = 0.5.dp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Debug popup dialog
+        if (showDebugPopup) {
+            AlertDialog(
+                onDismissRequest = { showDebugPopup = false },
+                title = { Text("Debug: Incoming Amounts") },
+                text = {
+                    LazyColumn {
+                        if (incomingTransactions.isEmpty()) {
+                            item {
+                                Text("No incoming transactions found.")
+                            }
+                        } else {
+                            items(incomingTransactions) { (description, amount) ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = description,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    Text(
+                                        text = formatAmount(amount),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Divider()
+                            }
+
+                            // Total amount
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "TOTAL",
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    Text(
+                                        text = formatAmount(incomingTransactions.sumOf { it.second }),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { showDebugPopup = false }
+                    ) {
+                        Text("Close")
+                    }
+                }
+            )
+        }
+    }
+}
+
+// Helper function to get app name from package name
+// Remove private keyword
+fun getAppNameFromPackage(packageName: String, title: String): String {
+    return when {
+        packageName == "com.wave.personal" -> "Wave"
+        packageName == "com.wave.business" -> "Wave Business"
+        packageName == "com.google.android.apps.messaging" -> {
+            when {
+                title.contains("OrangeMoney", ignoreCase = true) -> {
+                    // Extraire le type d'opération du titre
+                    val operation = extractOperationType(title, "OrangeMoney")
+                    "Orange Money - $operation"
+                }
+                title.contains("Mixx by Yas", ignoreCase = true) -> {
+                    // Extraire le type d'opération du titre
+                    val operation = extractOperationType(title, "Mixx by Yas")
+                    "Mixx by Yas - $operation"
+                }
+                else -> "Messaging Apps"
+            }
+        }
+        else -> packageName.split(".").last().capitalize(java.util.Locale.getDefault())
+    }
+}
+// Fonction auxiliaire pour extraire le type d'opération
+private fun extractOperationType(title: String, serviceName: String): String {
+    // Supprimer le nom du service du titre pour isoler l'opération
+    val serviceRemoved = title.replace(serviceName, "", ignoreCase = true).trim()
+
+    // Rechercher des mots clés courants pour les opérations
+    return when {
+        serviceRemoved.contains("recu", ignoreCase = true) -> "Transfert Reçu"
+        serviceRemoved.contains("transfert", ignoreCase = true) -> "Transfert envoyé"
+        serviceRemoved.contains("depot", ignoreCase = true) -> "Dépôt"
+        serviceRemoved.contains("retire", ignoreCase = true) -> "Retrait"
+        serviceRemoved.contains("operation de", ignoreCase = true) -> "Paiement"
+        // Ajouter d'autres types d'opérations selon vos besoins
+        else -> serviceRemoved.take(20) // Prendre les 20 premiers caractères si aucun mot-clé reconnu
+    }
+}
+
+// Helper function to format amount with thousand separators
+// Improved formatAmount function to handle larger amounts with proper formatting
+private fun formatAmount(amount: Double): String {
+    val formatter = NumberFormat.getNumberInstance(Locale.FRANCE) // Uses space as thousand separator
+    val formattedNumber = formatter.format(amount.toLong()).replace(" ", ".")
+    return "$formattedNumber Franc CFA"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeScreen(
+    homeViewModel: HomeViewModel,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToTrash: () -> Unit,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    val notifications by viewModel.notifications.collectAsState(initial = emptyList())
+    val searchQuery by viewModel.searchQuery.collectAsState("")
+
+    // Get incoming transaction stats
+    val totalIncomingAmount by viewModel.totalIncomingAmount.collectAsState()
+    val incomingAmountByApp by viewModel.incomingAmountByApp.collectAsState()
+    val dailyIncomingAmount by viewModel.dailyIncomingAmount.collectAsState()
+
+    // Get the user-selected app color from the theme
+    val context = LocalContext.current
+    val appColorFlow = remember {
+        context.dataStore.data.map { preferences ->
+            preferences[stringPreferencesKey("app_main_color")] ?: "#006400"
+        }
+    }
+    val appColorHex by appColorFlow.collectAsState(initial = "#006400")
+    val appColor = try {
+        Color(android.graphics.Color.parseColor(appColorHex))
+    } catch (e: Exception) {
+        Color(0xFF006400) // Default green
+    }
+
+    // Filter states
+    val selectedAppTypes by viewModel.selectedAppTypes.collectAsState()
+    val dateFilterType by viewModel.dateFilterType.collectAsState()
+    val selectedDate by viewModel.selectedDate.collectAsState()
+    val selectedDateRange by viewModel.selectedDateRange.collectAsState()
+
+    // UI states
+    val showFilters = remember { mutableStateOf(false) }
+    val readingNotificationId = remember { mutableStateOf<Long?>(null) }
+    val selectedNotification = remember { mutableStateOf<Notification?>(null) }
+
+    // For date picker
+    val showDatePicker = remember { mutableStateOf(false) }
+    val showDateRangePicker = remember { mutableStateOf(false) }
+
+    // In HomeScreen.kt, where DashboardHero is used
+    val incomingTransactions by viewModel.incomingTransactions.collectAsState()
+
+    // Scroll state for tracking
+    val scrollState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Track the collapsed state of dashboard based on scroll position
+    val isDashboardCollapsed = remember {
+        derivedStateOf { scrollState.firstVisibleItemIndex > 0 || scrollState.firstVisibleItemScrollOffset > 100 }
+    }
+
+    // Collapsible filter section
+    var filterSectionHeight by remember { mutableStateOf(0.dp) }
+    var filterSectionExpanded by remember { mutableStateOf(false) }
+    val maxHeight = remember { 250.dp }
+    val density = LocalDensity.current
+
+
+
+    // Background color for the entire screen
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color(0xFFF5F5F5)
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                            // Logo image
+                            Image(
+                                painter = painterResource(id = R.drawable.logo_kufay),
+                                contentDescription = "Kufay Logo",
+                                modifier = Modifier
+                                    .height(80.dp)
+                                    .padding(end = 8.dp)
+                            )
+                        }
+                    },
+                    actions = {
+                        // Filter button
+                        IconButton(onClick = {
+                            showFilters.value = !showFilters.value
+                            if (showFilters.value) {
+                                filterSectionExpanded = true
+                                filterSectionHeight = maxHeight
+                            } else {
+                                filterSectionExpanded = false
+                                filterSectionHeight = 0.dp
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Outlined.FilterList,
+                                contentDescription = "Filter",
+                                tint = if (showFilters.value) MaterialTheme.colorScheme.primary else Color.Gray
+                            )
+                        }
+
+                        IconButton(onClick = onNavigateToTrash) {
+                            Icon(Icons.Default.Delete, contentDescription = "Trash")
+                        }
+                        IconButton(onClick = {
+                            coroutineScope.launch {
+                                scrollState.animateScrollToItem(0)
+                            }
+                        }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        }
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.White,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            },
+            containerColor = Color(0xFFF5F5F5)
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                // This is the box that will stick to the top
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .zIndex(1f) // Makes sure it's above the scrollable content
+                ) {
+                    Column (
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .zIndex(1f) // Makes sure it's above the scrollable content
+                    )   {
+                        // Dashboard hero that adapts based on scroll
+                        DashboardHero(
+                            modifier = Modifier.fillMaxWidth(),
+                            appColor = appColor,
+                            totalIncomingAmount = totalIncomingAmount,
+                            incomingAmountByApp = incomingAmountByApp.mapKeys { (packageName, _) ->
+                                // Attention: cette ligne appelle la fonction mais n'utilise pas son résultat
+                                // getAppNameFromPackage(packageName, "")
+
+                                // Recherche d'une transaction correspondante
+                                val transactionForPackage = incomingTransactions.find { it.first.contains(packageName, ignoreCase = true) }
+                                val title = transactionForPackage?.first ?: ""
+
+                                // Utiliser correctement le résultat de la fonction
+                                getAppNameFromPackage(packageName, title)
+                            },
+                            dailyIncomingAmount = dailyIncomingAmount,
+                            isCollapsed = isDashboardCollapsed.value,
+                            incomingTransactions = incomingTransactions,
+                            onReadDailyTotal = {
+                                val totalText = if (dailyIncomingAmount != null)
+                                    "Total du jour ${dailyIncomingAmount?.toLong() ?:0} franc CFA"
+                                else
+                                    "aucun encaissement"
+                                viewModel.readDailyTotal(totalText)
+                            },
+                        )
+                        // Search bar
+                        SearchBar(
+                            query = searchQuery,
+                            onQueryChange = viewModel::setSearchQuery,
+                            notificationCount = notifications.size,
+                            modifier = Modifier
+                                .background(appColor)
+                                .shadow(elevation = 0.dp)
+                                .padding(bottom = 1.dp)
+                        )
+
+                        // Filter section (collapsible)
+                        if (showFilters.value) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(filterSectionHeight)
+                                    .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
+                                    .background(Color(0xFFF0F0F5))
+                                    .pointerInput(Unit) {
+                                        detectVerticalDragGestures(
+                                            onDragEnd = {
+                                                // Snap to fully expanded or collapsed
+                                                if (filterSectionHeight > maxHeight / 2) {
+                                                    filterSectionHeight = maxHeight
+                                                    filterSectionExpanded = true
+                                                } else {
+                                                    filterSectionHeight = 0.dp
+                                                    filterSectionExpanded = false
+                                                    showFilters.value = false
+                                                }
+                                            },
+                                            onDragCancel = {},
+                                            onVerticalDrag = { _, dragAmount ->
+                                                filterSectionHeight = (filterSectionHeight - with(density) { dragAmount.toDp() })
+                                                    .coerceIn(0.dp, maxHeight)
+                                            }
+                                        )
+                                    }
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                ) {
+                                    // Handle bar indicator at top
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterHorizontally)
+                                            .width(40.dp)
+                                            .height(4.dp)
+                                            .background(
+                                                color = Color.Gray.copy(alpha = 0.5f),
+                                                shape = RoundedCornerShape(2.dp)
+                                            )
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    // Filter content
+                                    FilterSection(
+                                        selectedAppTypes = selectedAppTypes,
+                                        onAppTypesSelected = viewModel::setSelectedAppTypes,
+                                        dateFilterType = dateFilterType,
+                                        onDateFilterTypeSelected = { newType ->
+                                            viewModel.setDateFilterType(newType)
+
+                                            // If switching to single day, set today as default
+                                            if (newType == DateFilterType.SINGLE_DAY && selectedDate == null) {
+                                                viewModel.selectToday()
+                                            }
+                                            // If switching to date range, set current week as default
+                                            else if (newType == DateFilterType.DATE_RANGE && selectedDateRange == null) {
+                                                viewModel.selectCurrentWeek()
+                                            }
+                                        },
+                                        selectedDate = selectedDate,
+                                        selectedDateRange = selectedDateRange,
+                                        onDateSelected = { date ->
+                                            // Show date picker dialog
+                                            showDatePicker.value = true
+                                        },
+                                        onDateRangeSelected = { range ->
+                                            // Show date range picker dialog
+                                            showDateRangePicker.value = true
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Calculate the spacer height based on the header content
+                val headerHeight by remember {
+                    derivedStateOf {
+                        when {
+                            isDashboardCollapsed.value && !showFilters.value -> 90.dp
+                            isDashboardCollapsed.value && showFilters.value -> 90.dp + filterSectionHeight
+                            !isDashboardCollapsed.value && !showFilters.value -> 160.dp
+                            else -> 160.dp + filterSectionHeight
+                        }
+                    }
+                }
+
+                // In the HomeScreen composable, inside the Box with fillMaxSize modifier
+// Add this line right after the end of the headerHeight calculation LaunchedEffect block
+// and before the LazyColumn
+// Banner Ad - Add this before LazyColumn pub google banniere gere ici
+               Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = headerHeight)
+                        .height(100.dp)
+                        .zIndex(0.9f)
+                ) {
+                    BannerAd(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF5F5F5))
+                            .height(75.dp)
+                    )
+                }
+            // Your existing LazyColumn content
+                // Update header height when dashboard collapses/expands
+
+                // Main scrollable content
+                LazyColumn(
+                    state = scrollState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = headerHeight + 50.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp, start = 8.dp, end = 8.dp) // Add padding equal to the header height
+                ) {
+                    // If no notifications, show empty state
+                    if (notifications.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(300.dp)
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Notifications,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(64.dp),
+                                        tint = Color.LightGray
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "No notifications match your filters",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        textAlign = TextAlign.Center,
+                                        color = Color.Gray
+                                    )
+                                    if (selectedAppTypes.isNotEmpty() || dateFilterType != DateFilterType.ALL_TIME) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Button(
+                                            onClick = {
+                                                viewModel.setSelectedAppTypes(emptySet())
+                                                viewModel.setDateFilterType(DateFilterType.ALL_TIME)
+                                                viewModel.setSelectedDate(null)
+                                                viewModel.setSelectedDateRange(null)
+                                            }
+                                        ) {
+                                            Text("Clear Filters")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Show count and button to clear filters if any active
+                        if (selectedAppTypes.isNotEmpty() || dateFilterType != DateFilterType.ALL_TIME) {
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Showing ${notifications.size} notifications",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.Gray
+                                    )
+
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.setSelectedAppTypes(emptySet())
+                                            viewModel.setDateFilterType(DateFilterType.ALL_TIME)
+                                            viewModel.setSelectedDate(null)
+                                            viewModel.setSelectedDateRange(null)
+                                        }
+                                    ) {
+                                        Text("Clear Filters")
+                                    }
+                                }
+                            }
+                        }
+
+                        // Notification items
+                        items(notifications) { notification ->
+                            val isReading = readingNotificationId.value == notification.id
+
+                            NotificationCard(
+                                notification = notification,
+                                isReading = isReading,
+                                onPlayPauseClick = {
+                                    if (isReading) {
+                                        viewModel.stopReading()
+                                        readingNotificationId.value = null
+                                    } else {
+                                        viewModel.readNotification(notification)
+                                        readingNotificationId.value = notification.id
+                                    }
+                                },
+                                onDeleteClick = {
+                                    viewModel.moveToTrash(notification)
+                                },
+                                onRestoreClick = {
+                                    viewModel.restoreFromTrash(notification)
+                                },
+                                onCardClick = {
+                                    selectedNotification.value = notification
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Notification detail dialog
+                selectedNotification.value?.let { notification ->
+                    NotificationDetailDialog(
+                        notification = notification,
+                        onDismiss = { selectedNotification.value = null }
+                    )
+                }
+                // Date Picker Dialog for single day
+                if (showDatePicker.value) {
+                    SimpleDatePickerDialog(
+                        onDismiss = { showDatePicker.value = false },
+                        onDateSelected = { date ->
+                            viewModel.setSelectedDate(date)
+                            showDatePicker.value = false
+                        }
+                    )
+                }
+
+                // Date Range Picker Dialog
+                if (showDateRangePicker.value) {
+                    SimpleDateRangePickerDialog(
+                        onDismiss = { showDateRangePicker.value = false },
+                        onDateRangeSelected = { startDate, endDate ->
+                            viewModel.setSelectedDateRange(Pair(startDate, endDate))
+                            showDateRangePicker.value = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Simple date picker dialog
+@Composable
+fun SimpleDatePickerDialog(
+    onDismiss: () -> Unit,
+    onDateSelected: (Long) -> Unit
+) {
+    val calendar = remember { Calendar.getInstance() }
+    var year by remember { mutableStateOf(calendar.get(Calendar.YEAR)) }
+    var month by remember { mutableStateOf(calendar.get(Calendar.MONTH)) }
+    var day by remember { mutableStateOf(calendar.get(Calendar.DAY_OF_MONTH)) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth()
+            ) {
+                Text(
+                    "Select Date",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                // More compact date picker
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // Day
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Day", style = MaterialTheme.typography.bodySmall)
+                        IconButton(onClick = {
+                            if (day > 1) day-- else {
+                                // Move to previous month
+                                if (month > 0) month-- else {
+                                    month = 11
+                                    year--
+                                }
+                                // Set day to last day of the month
+                                calendar.set(year, month, 1)
+                                day = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+                            }
+                        }) {
+                            Icon(Icons.Default.Remove, contentDescription = "Previous Day")
+                        }
+                        Text(day.toString(), style = MaterialTheme.typography.titleMedium)
+                        IconButton(onClick = {
+                            // Calculate max days in current month
+                            calendar.set(year, month, 1)
+                            val maxDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+                            if (day < maxDay) day++ else {
+                                day = 1
+                                if (month < 11) month++ else {
+                                    month = 0
+                                    year++
+                                }
+                            }
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "Next Day")
+                        }
+                    }
+
+                    // Month
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Month", style = MaterialTheme.typography.bodySmall)
+                        IconButton(onClick = {
+                            if (month > 0) month-- else {
+                                month = 11
+                                year--
+                            }
+                        }) {
+                            Icon(Icons.Default.Remove, contentDescription = "Previous Month")
+                        }
+                        Text(
+                            getMonthName(month).substring(0, 3),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        IconButton(onClick = {
+                            if (month < 11) month++ else {
+                                month = 0
+                                year++
+                            }
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "Next Month")
+                        }
+                    }
+
+                    // Year
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Year", style = MaterialTheme.typography.bodySmall)
+                        IconButton(onClick = { year-- }) {
+                            Icon(Icons.Default.Remove, contentDescription = "Previous Year")
+                        }
+                        Text(year.toString(), style = MaterialTheme.typography.titleMedium)
+                        IconButton(onClick = { year++ }) {
+                            Icon(Icons.Default.Add, contentDescription = "Next Year")
+                        }
+                    }
+                }
+
+                // Show selected date
+                val dateFormat = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault())
+                calendar.set(year, month, day)
+                Text(
+                    dateFormat.format(calendar.time),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(vertical = 8.dp)
+                )
+
+                // Buttons
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            calendar.set(year, month, day)
+                            onDateSelected(calendar.timeInMillis)
+                        }
+                    ) {
+                        Text("OK")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Simple date range picker
+@Composable
+fun SimpleDateRangePickerDialog(
+    onDismiss: () -> Unit,
+    onDateRangeSelected: (Long, Long) -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth()
+            ) {
+                Text(
+                    "Select Date Range",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                // Start date
+                var startDate by remember { mutableStateOf(Calendar.getInstance().timeInMillis) }
+                var endDate by remember { mutableStateOf(Calendar.getInstance().timeInMillis) }
+
+                // Compact date range selection
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Start date row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "From: ",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(60.dp)
+                        )
+
+                        // Date selector in DD/MM/YYYY format
+                        DateSelector(
+                            initialDate = startDate,
+                            onDateChange = { startDate = it }
+                        )
+                    }
+
+                    // End date row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "To: ",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(60.dp)
+                        )
+
+                        // Date selector in DD/MM/YYYY format
+                        DateSelector(
+                            initialDate = endDate,
+                            onDateChange = { endDate = it }
+                        )
+                    }
+
+                    // Quick selections
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        // This Week button
+                        TextButton(onClick = {
+                            val calendar = Calendar.getInstance()
+                            endDate = calendar.timeInMillis
+
+                            calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                            startDate = calendar.timeInMillis
+                        }) {
+                            Text("This Week")
+                        }
+
+                        // This Month button
+                        TextButton(onClick = {
+                            val calendar = Calendar.getInstance()
+                            endDate = calendar.timeInMillis
+
+                            calendar.set(Calendar.DAY_OF_MONTH, 1)
+                            startDate = calendar.timeInMillis
+                        }) {
+                            Text("This Month")
+                        }
+                    }
+                }
+
+                // Show selected range
+                val dateFormat = SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault())
+                Text(
+                    "Selected Range: ${dateFormat.format(Date(startDate))} to ${dateFormat.format(Date(endDate))}",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(vertical = 8.dp)
+                )
+
+                // Buttons
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            if (startDate <= endDate) {
+                                onDateRangeSelected(startDate, endDate)
+                            } else {
+                                // Swap if start date is after end date
+                                onDateRangeSelected(endDate, startDate)
+                            }
+                        }
+                    ) {
+                        Text("OK")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Helper component for date selection in date range picker
+@Composable
+fun DateSelector(
+    initialDate: Long,
+    onDateChange: (Long) -> Unit
+) {
+    val calendar = remember { Calendar.getInstance().apply { timeInMillis = initialDate } }
+    var year by remember { mutableStateOf(calendar.get(Calendar.YEAR)) }
+    var month by remember { mutableStateOf(calendar.get(Calendar.MONTH)) }
+    var day by remember { mutableStateOf(calendar.get(Calendar.DAY_OF_MONTH)) }
+
+    // Update the date whenever year, month or day changes
+    LaunchedEffect(year, month, day) {
+        calendar.set(year, month, day)
+        onDateChange(calendar.timeInMillis)
+    }
+
+    // Compact date selector
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Day
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(onClick = {
+                if (day > 1) day-- else {
+                    // Move to previous month
+                    if (month > 0) month-- else {
+                        month = 11
+                        year--
+                    }
+                    // Set day to last day of the month
+                    calendar.set(year, month, 1)
+                    day = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+                }
+            }) {
+                Icon(Icons.Default.Remove, contentDescription = "Previous Day", modifier = Modifier.size(20.dp))
+            }
+            Text(day.toString(), style = MaterialTheme.typography.bodyLarge)
+            IconButton(onClick = {
+                // Calculate max days in current month
+                calendar.set(year, month, 1)
+                val maxDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+                if (day < maxDay) day++ else {
+                    day = 1
+                    if (month < 11) month++ else {
+                        month = 0
+                        year++
+                    }
+                }
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "Next Day", modifier = Modifier.size(20.dp))
+            }
+        }
+
+        Text("/", style = MaterialTheme.typography.titleMedium)
+
+        // Month
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(onClick = {
+                if (month > 0) month-- else {
+                    month = 11
+                    year--
+                }
+            }) {
+                Icon(Icons.Default.Remove, contentDescription = "Previous Month", modifier = Modifier.size(20.dp))
+            }
+            Text(
+                (month + 1).toString().padStart(2, '0'),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            IconButton(onClick = {
+                if (month < 11) month++ else {
+                    month = 0
+                    year++
+                }
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "Next Month", modifier = Modifier.size(20.dp))
+            }
+        }
+
+        Text("/", style = MaterialTheme.typography.titleMedium)
+
+        // Year
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(onClick = { year-- }) {
+                Icon(Icons.Default.Remove, contentDescription = "Previous Year", modifier = Modifier.size(20.dp))
+            }
+            Text(year.toString(), style = MaterialTheme.typography.bodyLarge)
+            IconButton(onClick = { year++ }) {
+                Icon(Icons.Default.Add, contentDescription = "Next Year", modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+// Helper component for date range selection tabs
+@Composable
+fun TabButton(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .padding(4.dp)
+            .height(40.dp)
+            .fillMaxWidth()
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                else Color.Transparent,
+                RoundedCornerShape(8.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
+        )
+    }
+}
+
+// Helper function to get month name
+fun getMonthName(month: Int): String {
+    return when (month) {
+        0 -> "January"
+        1 -> "February"
+        2 -> "March"
+        3 -> "April"
+        4 -> "May"
+        5 -> "June"
+        6 -> "July"
+        7 -> "August"
+        8 -> "September"
+        9 -> "October"
+        10 -> "November"
+        11 -> "December"
+        else -> "Unknown"
+    }
+}
+
+@Composable
+fun AdMobBanner(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx: Context ->
+            AdView(ctx).apply {
+                setAdSize(AdSize.BANNER)
+                adUnitId = "ca-app-pub-5150393955061751/5025492745" // Remplace par ton propre ID
+                loadAd(AdRequest.Builder().build())
+            }
+        }
+    )
+}

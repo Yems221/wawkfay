@@ -1,0 +1,62 @@
+.
+├── .DS_Store
+├── KufayApp.kt
+├── MainActivity.kt
+├── architecture.txt
+├── data
+│   ├── .DS_Store
+│   ├── db
+│   │   ├── .DS_Store
+│   │   ├── KufayDatabase.kt
+│   │   ├── dao
+│   │   │   ├── .DS_Store
+│   │   │   └── NotificationDao.kt
+│   │   └── entities
+│   │       └── Notification.kt
+│   ├── preferences
+│   │   └── UserPreferences.kt
+│   └── repository
+│       └── NotificationRepository.kt
+├── di
+│   ├── .DS_Store
+│   ├── AppModule.kt
+│   └── WorkManagerInitializer.kt
+├── res
+│   └── values
+├── service
+│   ├── KufayNotificationListenerService.kt
+│   └── TTSService.kt
+├── ui
+│   ├── components
+│   │   ├── BannerAd.kt
+│   │   ├── DashboardHero.kt
+│   │   ├── FilterComponents.kt
+│   │   ├── NotificationCard.kt
+│   │   └── SearchBar.kt
+│   ├── models
+│   │   ├── .DS_Store
+│   │   ├── NotificationDetailDialog.kt
+│   │   └── NotificationUiModels.kt
+│   ├── navigation
+│   │   └── Navigation.kt
+│   ├── screens
+│   │   ├── HomeScreen.kt
+│   │   ├── SettingsScreen.kt
+│   │   └── TrashScreen.kt
+│   ├── theme
+│   │   ├── .DS_Store
+│   │   ├── Color.kt
+│   │   ├── Shapes.kt
+│   │   ├── Theme.kt
+│   │   └── Typography.kt
+│   └── viewmodels
+│       ├── HomeViewModel.kt
+│       ├── SettingsViewModel.kt
+│       └── TrashViewModel.kt
+├── utils
+│   └── NotificationUtils.kt
+└── workers
+    ├── DailyStatsResetWorker.kt
+    └── NotificationCleanupWorker.kt
+
+20 directories, 40 files
