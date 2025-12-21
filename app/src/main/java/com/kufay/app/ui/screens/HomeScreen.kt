@@ -64,8 +64,13 @@ import android.widget.FrameLayout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.ads.*
-
-
+import androidx.compose.foundation.border
+import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.BorderStroke
 
 // Dashboard Hero Section that displays at the top of the home screen
 @Composable
@@ -1013,307 +1018,734 @@ fun SimpleDatePickerDialog(
 }
 
 // Simple date range picker
+// Modern date range picker with quick select and calendar
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SimpleDateRangePickerDialog(
     onDismiss: () -> Unit,
     onDateRangeSelected: (Long, Long) -> Unit
 ) {
+    var startDate by remember {
+        mutableStateOf(Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+        }.timeInMillis)
+    }
+    var endDate by remember { mutableStateOf(Calendar.getInstance().timeInMillis) }
+    var showCalendarFor by remember { mutableStateOf<String?>(null) } // "start" or "end"
+    var selectedQuickButton by remember { mutableStateOf("this_week") }
+
+    // Get theme colors
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val surfaceColor = MaterialTheme.colorScheme.surface
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = Color.White
+            shape = RoundedCornerShape(24.dp),
+            color = surfaceColor,
+            tonalElevation = 3.dp
         ) {
             Column(
                 modifier = Modifier
-                    .padding(16.dp)
                     .fillMaxWidth()
+                    .padding(24.dp)
             ) {
+                // Title
                 Text(
-                    "Select Date Range",
+                    text = "Select Date Range", // TODO: Use stringResource when strings added
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = 20.dp)
                 )
 
-                // Start date
-                var startDate by remember { mutableStateOf(Calendar.getInstance().timeInMillis) }
-                var endDate by remember { mutableStateOf(Calendar.getInstance().timeInMillis) }
-
-                // Compact date range selection
+                // Date Input Fields
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Start date row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "From: ",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.width(60.dp)
-                        )
+                    // From Date
+                    DateInputField(
+                        label = "From:",
+                        date = startDate,
+                        primaryColor = primaryColor,
+                        onClick = { showCalendarFor = "start" }
+                    )
 
-                        // Date selector in DD/MM/YYYY format
-                        DateSelector(
-                            initialDate = startDate,
-                            onDateChange = { startDate = it }
-                        )
-                    }
-
-                    // End date row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "To: ",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.width(60.dp)
-                        )
-
-                        // Date selector in DD/MM/YYYY format
-                        DateSelector(
-                            initialDate = endDate,
-                            onDateChange = { endDate = it }
-                        )
-                    }
-
-                    // Quick selections
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        // This Week button
-                        TextButton(onClick = {
-                            val calendar = Calendar.getInstance()
-                            endDate = calendar.timeInMillis
-
-                            calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-                            startDate = calendar.timeInMillis
-                        }) {
-                            Text("This Week")
-                        }
-
-                        // This Month button
-                        TextButton(onClick = {
-                            val calendar = Calendar.getInstance()
-                            endDate = calendar.timeInMillis
-
-                            calendar.set(Calendar.DAY_OF_MONTH, 1)
-                            startDate = calendar.timeInMillis
-                        }) {
-                            Text("This Month")
-                        }
-                    }
+                    // To Date
+                    DateInputField(
+                        label = "To:",
+                        date = endDate,
+                        primaryColor = primaryColor,
+                        onClick = { showCalendarFor = "end" }
+                    )
                 }
 
-                // Show selected range
-                val dateFormat = SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault())
+                // Quick Select Label
                 Text(
-                    "Selected Range: ${dateFormat.format(Date(startDate))} to ${dateFormat.format(Date(endDate))}",
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .padding(vertical = 8.dp)
+                    text = "Quick Select:",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 20.dp, bottom = 12.dp)
                 )
 
-                // Buttons
+                // Quick Select Buttons
+                QuickSelectButtons(
+                    selectedButton = selectedQuickButton,
+                    primaryColor = primaryColor,
+                    onRangeSelected = { start, end, buttonId ->
+                        startDate = start
+                        endDate = end
+                        selectedQuickButton = buttonId
+                    }
+                )
+
+                // Selected Range Display
+                SelectedRangeDisplay(
+                    startDate = startDate,
+                    endDate = endDate,
+                    primaryColor = primaryColor,
+                    modifier = Modifier.padding(top = 20.dp, bottom = 20.dp)
+                )
+
+                // Action Buttons
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
                         Text("Cancel")
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
                     Button(
                         onClick = {
                             if (startDate <= endDate) {
                                 onDateRangeSelected(startDate, endDate)
                             } else {
-                                // Swap if start date is after end date
                                 onDateRangeSelected(endDate, startDate)
                             }
-                        }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFDB913) // Kufay yellow
+                        ),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("OK")
+                        Text(
+                            text = "Apply",
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
             }
         }
     }
-}
 
-// Helper component for date selection in date range picker
-@Composable
-fun DateSelector(
-    initialDate: Long,
-    onDateChange: (Long) -> Unit
-) {
-    val calendar = remember { Calendar.getInstance().apply { timeInMillis = initialDate } }
-    var year by remember { mutableStateOf(calendar.get(Calendar.YEAR)) }
-    var month by remember { mutableStateOf(calendar.get(Calendar.MONTH)) }
-    var day by remember { mutableStateOf(calendar.get(Calendar.DAY_OF_MONTH)) }
-
-    // Update the date whenever year, month or day changes
-    LaunchedEffect(year, month, day) {
-        calendar.set(year, month, day)
-        onDateChange(calendar.timeInMillis)
-    }
-
-    // Compact date selector
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Day
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            IconButton(onClick = {
-                if (day > 1) day-- else {
-                    // Move to previous month
-                    if (month > 0) month-- else {
-                        month = 11
-                        year--
+    // Calendar Popup
+    if (showCalendarFor != null) {
+        MiniCalendarDialog(
+            initialDate = if (showCalendarFor == "start") startDate else endDate,
+            onDismiss = { showCalendarFor = null },
+            onDateSelected = { selectedDate ->
+                when (showCalendarFor) {
+                    "start" -> {
+                        startDate = selectedDate
+                        if (startDate > endDate) endDate = startDate
                     }
-                    // Set day to last day of the month
-                    calendar.set(year, month, 1)
-                    day = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-                }
-            }) {
-                Icon(Icons.Default.Remove, contentDescription = "Previous Day", modifier = Modifier.size(20.dp))
-            }
-            Text(day.toString(), style = MaterialTheme.typography.bodyLarge)
-            IconButton(onClick = {
-                // Calculate max days in current month
-                calendar.set(year, month, 1)
-                val maxDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-                if (day < maxDay) day++ else {
-                    day = 1
-                    if (month < 11) month++ else {
-                        month = 0
-                        year++
+                    "end" -> {
+                        endDate = selectedDate
+                        if (endDate < startDate) startDate = endDate
                     }
                 }
-            }) {
-                Icon(Icons.Default.Add, contentDescription = "Next Day", modifier = Modifier.size(20.dp))
+                showCalendarFor = null
             }
-        }
-
-        Text("/", style = MaterialTheme.typography.titleMedium)
-
-        // Month
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            IconButton(onClick = {
-                if (month > 0) month-- else {
-                    month = 11
-                    year--
-                }
-            }) {
-                Icon(Icons.Default.Remove, contentDescription = "Previous Month", modifier = Modifier.size(20.dp))
-            }
-            Text(
-                (month + 1).toString().padStart(2, '0'),
-                style = MaterialTheme.typography.bodyLarge
-            )
-            IconButton(onClick = {
-                if (month < 11) month++ else {
-                    month = 0
-                    year++
-                }
-            }) {
-                Icon(Icons.Default.Add, contentDescription = "Next Month", modifier = Modifier.size(20.dp))
-            }
-        }
-
-        Text("/", style = MaterialTheme.typography.titleMedium)
-
-        // Year
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            IconButton(onClick = { year-- }) {
-                Icon(Icons.Default.Remove, contentDescription = "Previous Year", modifier = Modifier.size(20.dp))
-            }
-            Text(year.toString(), style = MaterialTheme.typography.bodyLarge)
-            IconButton(onClick = { year++ }) {
-                Icon(Icons.Default.Add, contentDescription = "Next Year", modifier = Modifier.size(20.dp))
-            }
-        }
-    }
-}
-
-// Helper component for date range selection tabs
-@Composable
-fun TabButton(
-    text: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .padding(4.dp)
-            .height(40.dp)
-            .fillMaxWidth()
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                else Color.Transparent,
-                RoundedCornerShape(8.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
         )
     }
 }
 
-// Helper function to get month name
-fun getMonthName(month: Int): String {
-    return when (month) {
-        0 -> "January"
-        1 -> "February"
-        2 -> "March"
-        3 -> "April"
-        4 -> "May"
-        5 -> "June"
-        6 -> "July"
-        7 -> "August"
-        8 -> "September"
-        9 -> "October"
-        10 -> "November"
-        11 -> "December"
-        else -> "Unknown"
+// Date Input Field Component
+@Composable
+private fun DateInputField(
+    label: String,
+    date: Long,
+    primaryColor: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(50.dp)
+        )
+
+        Surface(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onClick),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(date)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Icon(
+                    imageVector = Icons.Default.CalendarToday,
+                    contentDescription = "Calendar",
+                    tint = primaryColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
     }
 }
 
+// Quick Select Buttons
 @Composable
-fun AdMobBanner(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
+private fun QuickSelectButtons(
+    selectedButton: String,
+    primaryColor: Color,
+    onRangeSelected: (Long, Long, String) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Row 1
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            QuickSelectButton(
+                text = "Today",
+                isSelected = selectedButton == "today",
+                primaryColor = primaryColor,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    cal.set(Calendar.HOUR_OF_DAY, 0)
+                    cal.set(Calendar.MINUTE, 0)
+                    cal.set(Calendar.SECOND, 0)
+                    val today = cal.timeInMillis
+                    onRangeSelected(today, today, "today")
+                }
+            )
 
-    AndroidView(
-        modifier = modifier,
-        factory = { ctx: Context ->
-            AdView(ctx).apply {
-                setAdSize(AdSize.BANNER)
-                adUnitId = "ca-app-pub-5150393955061751/5025492745" // Remplace par ton propre ID
-                loadAd(AdRequest.Builder().build())
+            QuickSelectButton(
+                text = "Last 7d",
+                isSelected = selectedButton == "last_7d",
+                primaryColor = primaryColor,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    val end = cal.timeInMillis
+                    cal.add(Calendar.DAY_OF_YEAR, -6)
+                    onRangeSelected(cal.timeInMillis, end, "last_7d")
+                }
+            )
+
+            QuickSelectButton(
+                text = "Last 30d",
+                isSelected = selectedButton == "last_30d",
+                primaryColor = primaryColor,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    val end = cal.timeInMillis
+                    cal.add(Calendar.DAY_OF_YEAR, -29)
+                    onRangeSelected(cal.timeInMillis, end, "last_30d")
+                }
+            )
+        }
+
+        // Row 2
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            QuickSelectButton(
+                text = "This Week",
+                isSelected = selectedButton == "this_week",
+                primaryColor = primaryColor,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    val end = cal.timeInMillis
+                    cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                    onRangeSelected(cal.timeInMillis, end, "this_week")
+                }
+            )
+
+            QuickSelectButton(
+                text = "This Month",
+                isSelected = selectedButton == "this_month",
+                primaryColor = primaryColor,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    val end = cal.timeInMillis
+                    cal.set(Calendar.DAY_OF_MONTH, 1)
+                    onRangeSelected(cal.timeInMillis, end, "this_month")
+                }
+            )
+
+            QuickSelectButton(
+                text = "This Year",
+                isSelected = selectedButton == "this_year",
+                primaryColor = primaryColor,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val cal = Calendar.getInstance()
+                    val end = cal.timeInMillis
+                    cal.set(Calendar.DAY_OF_YEAR, 1)
+                    onRangeSelected(cal.timeInMillis, end, "this_year")
+                }
+            )
+        }
+    }
+}
+
+// Individual Quick Button
+@Composable
+private fun QuickSelectButton(
+    text: String,
+    isSelected: Boolean,
+    primaryColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(10.dp),
+        color = if (isSelected) primaryColor else Color.Transparent,
+        border = BorderStroke(
+            width = 1.5.dp,
+            color = if (isSelected) primaryColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+// Selected Range Display
+@Composable
+private fun SelectedRangeDisplay(
+    startDate: Long,
+    endDate: Long,
+    primaryColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = primaryColor.copy(alpha = 0.1f),
+        border = BorderStroke(2.dp, primaryColor.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Text(
+                text = "SELECTED RANGE",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = primaryColor,
+                letterSpacing = 0.5.sp
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            val sdf = SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault())
+            Text(
+                text = "${sdf.format(Date(startDate))} → ${sdf.format(Date(endDate))}",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+// Mini Calendar Dialog
+@Composable
+private fun MiniCalendarDialog(
+    initialDate: Long,
+    onDismiss: () -> Unit,
+    onDateSelected: (Long) -> Unit
+) {
+    val cal = remember { Calendar.getInstance().apply { timeInMillis = initialDate } }
+    var displayMonth by remember { mutableStateOf(cal.get(Calendar.MONTH)) }
+    var displayYear by remember { mutableStateOf(cal.get(Calendar.YEAR)) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            tonalElevation = 3.dp
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${getMonthName(displayMonth)} $displayYear",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Row {
+                        IconButton(onClick = {
+                            if (displayMonth == 0) {
+                                displayMonth = 11
+                                displayYear--
+                            } else displayMonth--
+                        }) {
+                            Icon(Icons.Default.ChevronLeft, "Previous")
+                        }
+
+                        IconButton(onClick = {
+                            if (displayMonth == 11) {
+                                displayMonth = 0
+                                displayYear++
+                            } else displayMonth++
+                        }) {
+                            Icon(Icons.Default.ChevronRight, "Next")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Day headers
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su").forEach {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.width(40.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Calendar grid
+                CalendarGrid(displayMonth, displayYear, initialDate, onDateSelected)
             }
         }
-    )
+    }
+}
+
+// Calendar Grid
+@Composable
+private fun CalendarGrid(
+    month: Int,
+    year: Int,
+    selectedDate: Long,
+    onDateSelected: (Long) -> Unit
+) {
+    val cal = Calendar.getInstance()
+    cal.set(year, month, 1)
+    val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+    val startOffset = if (firstDayOfWeek == Calendar.SUNDAY) 6 else firstDayOfWeek - 2
+    val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+    val selectedCal = Calendar.getInstance().apply { timeInMillis = selectedDate }
+    val today = Calendar.getInstance()
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        var dayCounter = 1 - startOffset
+
+        repeat(6) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                repeat(7) {
+                    if (dayCounter in 1..daysInMonth) {
+                        val currentDay = dayCounter
+                        cal.set(year, month, currentDay)
+
+                        val isSelected = selectedCal.get(Calendar.YEAR) == year &&
+                                selectedCal.get(Calendar.MONTH) == month &&
+                                selectedCal.get(Calendar.DAY_OF_MONTH) == currentDay
+
+                        val isToday = today.get(Calendar.YEAR) == year &&
+                                today.get(Calendar.MONTH) == month &&
+                                today.get(Calendar.DAY_OF_MONTH) == currentDay
+
+                        CalendarDay(currentDay, isSelected, isToday) {
+                            cal.set(year, month, currentDay)
+                            cal.set(Calendar.HOUR_OF_DAY, 0)
+                            cal.set(Calendar.MINUTE, 0)
+                            cal.set(Calendar.SECOND, 0)
+                            onDateSelected(cal.timeInMillis)
+                        }
+                    } else {
+                        Spacer(Modifier.size(40.dp))
+                    }
+                    dayCounter++
+                }
+            }
+        }
+    }
+}
+
+// Calendar Day
+@Composable
+private fun CalendarDay(
+    day: Int,
+    isSelected: Boolean,
+    isToday: Boolean,
+    onClick: () -> Unit
+) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(if (isSelected) primaryColor else Color.Transparent)
+            .border(
+                width = if (isToday && !isSelected) 2.dp else 0.dp,
+                color = primaryColor,
+                shape = CircleShape
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = day.toString(),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+            color = when {
+                isSelected -> Color.White
+                isToday -> primaryColor
+                else -> MaterialTheme.colorScheme.onSurface
+            }
+        )
+    }
+
+    // Helper component for date selection in date range picker
+    @Composable
+    fun DateSelector(
+        initialDate: Long,
+        onDateChange: (Long) -> Unit
+    ) {
+        val calendar = remember { Calendar.getInstance().apply { timeInMillis = initialDate } }
+        var year by remember { mutableStateOf(calendar.get(Calendar.YEAR)) }
+        var month by remember { mutableStateOf(calendar.get(Calendar.MONTH)) }
+        var day by remember { mutableStateOf(calendar.get(Calendar.DAY_OF_MONTH)) }
+
+        // Update the date whenever year, month or day changes
+        LaunchedEffect(year, month, day) {
+            calendar.set(year, month, day)
+            onDateChange(calendar.timeInMillis)
+        }
+
+        // Compact date selector
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Day
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(onClick = {
+                    if (day > 1) day-- else {
+                        // Move to previous month
+                        if (month > 0) month-- else {
+                            month = 11
+                            year--
+                        }
+                        // Set day to last day of the month
+                        calendar.set(year, month, 1)
+                        day = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+                    }
+                }) {
+                    Icon(
+                        Icons.Default.Remove,
+                        contentDescription = "Previous Day",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(day.toString(), style = MaterialTheme.typography.bodyLarge)
+                IconButton(onClick = {
+                    // Calculate max days in current month
+                    calendar.set(year, month, 1)
+                    val maxDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+                    if (day < maxDay) day++ else {
+                        day = 1
+                        if (month < 11) month++ else {
+                            month = 0
+                            year++
+                        }
+                    }
+                }) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Next Day",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Text("/", style = MaterialTheme.typography.titleMedium)
+
+            // Month
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(onClick = {
+                    if (month > 0) month-- else {
+                        month = 11
+                        year--
+                    }
+                }) {
+                    Icon(
+                        Icons.Default.Remove,
+                        contentDescription = "Previous Month",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    (month + 1).toString().padStart(2, '0'),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                IconButton(onClick = {
+                    if (month < 11) month++ else {
+                        month = 0
+                        year++
+                    }
+                }) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Next Month",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Text("/", style = MaterialTheme.typography.titleMedium)
+
+            // Year
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(onClick = { year-- }) {
+                    Icon(
+                        Icons.Default.Remove,
+                        contentDescription = "Previous Year",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(year.toString(), style = MaterialTheme.typography.bodyLarge)
+                IconButton(onClick = { year++ }) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Next Year",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    // Helper component for date range selection tabs
+    @Composable
+    fun TabButton(
+        text: String,
+        isSelected: Boolean,
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier
+    ) {
+        Box(
+            modifier = modifier
+                .padding(4.dp)
+                .height(40.dp)
+                .fillMaxWidth()
+                .background(
+                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    else Color.Transparent,
+                    RoundedCornerShape(8.dp)
+                )
+                .clickable(onClick = onClick)
+                .padding(8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
+            )
+        }
+    }
+
+    // Helper function to get month name
+    fun getMonthName(month: Int): String {
+        return when (month) {
+            0 -> "January"
+            1 -> "February"
+            2 -> "March"
+            3 -> "April"
+            4 -> "May"
+            5 -> "June"
+            6 -> "July"
+            7 -> "August"
+            8 -> "September"
+            9 -> "October"
+            10 -> "November"
+            11 -> "December"
+            else -> "Unknown"
+        }
+    }
+
+    @Composable
+    fun AdMobBanner(modifier: Modifier = Modifier) {
+        val context = LocalContext.current
+
+        AndroidView(
+            modifier = modifier,
+            factory = { ctx: Context ->
+                AdView(ctx).apply {
+                    setAdSize(AdSize.BANNER)
+                    adUnitId =
+                        "ca-app-pub-5150393955061751/5025492745" // Remplace par ton propre ID
+                    loadAd(AdRequest.Builder().build())
+                }
+            }
+        )
+    }
 }
