@@ -482,10 +482,10 @@ fun HomeScreen(
         derivedStateOf { scrollState.firstVisibleItemIndex > 0 || scrollState.firstVisibleItemScrollOffset > 100 }
     }
 
-    // Collapsible filter section
+    // Collapsible filter section - INCREASED HEIGHT FROM 250dp to 350dp
     var filterSectionHeight by remember { mutableStateOf(0.dp) }
     var filterSectionExpanded by remember { mutableStateOf(false) }
-    val maxHeight = remember { 250.dp }
+    val maxHeight = remember { 350.dp } // FIXED: Increased from 250dp to accommodate all content
     val density = LocalDensity.current
 
 
@@ -608,34 +608,18 @@ fun HomeScreen(
                                 .padding(bottom = 1.dp)
                         )
 
-                        // Filter section (collapsible)
-                        if (showFilters.value) {
+                        // Filter section (collapsible) - FIXED: Added better spacing and animations
+                        AnimatedVisibility(
+                            visible = showFilters.value,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(filterSectionHeight)
+                                    .heightIn(max = maxHeight) // Use heightIn instead of fixed height
                                     .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
                                     .background(Color(0xFFF0F0F5))
-                                    .pointerInput(Unit) {
-                                        detectVerticalDragGestures(
-                                            onDragEnd = {
-                                                // Snap to fully expanded or collapsed
-                                                if (filterSectionHeight > maxHeight / 2) {
-                                                    filterSectionHeight = maxHeight
-                                                    filterSectionExpanded = true
-                                                } else {
-                                                    filterSectionHeight = 0.dp
-                                                    filterSectionExpanded = false
-                                                    showFilters.value = false
-                                                }
-                                            },
-                                            onDragCancel = {},
-                                            onVerticalDrag = { _, dragAmount ->
-                                                filterSectionHeight = (filterSectionHeight - with(density) { dragAmount.toDp() })
-                                                    .coerceIn(0.dp, maxHeight)
-                                            }
-                                        )
-                                    }
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -654,7 +638,7 @@ fun HomeScreen(
                                             )
                                     )
 
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
 
                                     // Filter content
                                     FilterSection(
@@ -685,6 +669,9 @@ fun HomeScreen(
                                         },
                                         modifier = Modifier.fillMaxWidth()
                                     )
+
+                                    // FIXED: Add bottom spacing to prevent cut-off
+                                    Spacer(modifier = Modifier.height(16.dp))
                                 }
                             }
                         }
@@ -703,11 +690,8 @@ fun HomeScreen(
                     }
                 }
 
-                // In the HomeScreen composable, inside the Box with fillMaxSize modifier
-// Add this line right after the end of the headerHeight calculation LaunchedEffect block
-// and before the LazyColumn
-// Banner Ad - Add this before LazyColumn pub google banniere gere ici
-               Box(
+                // Banner Ad
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = headerHeight)
@@ -721,8 +705,6 @@ fun HomeScreen(
                             .height(75.dp)
                     )
                 }
-            // Your existing LazyColumn content
-                // Update header height when dashboard collapses/expands
 
                 // Main scrollable content
                 LazyColumn(
@@ -730,7 +712,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(top = headerHeight + 50.dp),
-                    contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp, start = 8.dp, end = 8.dp) // Add padding equal to the header height
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp, start = 8.dp, end = 8.dp)
                 ) {
                     // If no notifications, show empty state
                     if (notifications.isEmpty()) {
@@ -835,16 +817,24 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
 
-                // Notification detail dialog
-                selectedNotification.value?.let { notification ->
-                    NotificationDetailDialog(
-                        notification = notification,
-                        onDismiss = { selectedNotification.value = null }
-                    )
+            // FIXED: Move dialogs OUTSIDE the scrollable Box - place them at Scaffold level with high z-index
+            // This ensures they appear on top of everything
+            if (selectedNotification.value != null) {
+                Box(modifier = Modifier.fillMaxSize().zIndex(10f)) {
+                    selectedNotification.value?.let { notification ->
+                        NotificationDetailDialog(
+                            notification = notification,
+                            onDismiss = { selectedNotification.value = null }
+                        )
+                    }
                 }
-                // Date Picker Dialog for single day
-                if (showDatePicker.value) {
+            }
+
+            // Date Picker Dialog for single day - FIXED: Moved outside scrollable content
+            if (showDatePicker.value) {
+                Box(modifier = Modifier.fillMaxSize().zIndex(10f)) {
                     SimpleDatePickerDialog(
                         onDismiss = { showDatePicker.value = false },
                         onDateSelected = { date ->
@@ -853,9 +843,11 @@ fun HomeScreen(
                         }
                     )
                 }
+            }
 
-                // Date Range Picker Dialog
-                if (showDateRangePicker.value) {
+            // Date Range Picker Dialog - FIXED: Moved outside scrollable content
+            if (showDateRangePicker.value) {
+                Box(modifier = Modifier.fillMaxSize().zIndex(10f)) {
                     SimpleDateRangePickerDialog(
                         onDismiss = { showDateRangePicker.value = false },
                         onDateRangeSelected = { startDate, endDate ->
