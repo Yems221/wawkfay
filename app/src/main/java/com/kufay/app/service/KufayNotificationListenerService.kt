@@ -1,7 +1,12 @@
 package com.kufay.app.service
 
 import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -15,9 +20,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.kufay.app.MainActivity
+import com.kufay.app.R
 
 @AndroidEntryPoint
 class KufayNotificationListenerService : NotificationListenerService() {
+
+    companion object {
+        private const val FOREGROUND_NOTIFICATION_ID = 1001
+        private const val CHANNEL_ID = "kufay_service_channel"
+        private const val CHANNEL_NAME = "Kufay Service"
+    }
 
     @Inject
     lateinit var notificationRepository: NotificationRepository
@@ -33,47 +46,88 @@ class KufayNotificationListenerService : NotificationListenerService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO)
 
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Kufay notification listener service"
+                setShowBadge(false)
+            }
+
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager?.createNotificationChannel(channel)
+        }
+    }
+
+    private fun createForegroundNotification(): android.app.Notification {
+        createNotificationChannel()
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Kufay est actif")
+            .setContentText("Écoute des notifications financières...")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setOngoing(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        Log.d("KUFAY_SERVICE", "Service created - starting as foreground")
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Android 14+ (API 34)
+                startForeground(
+                    FOREGROUND_NOTIFICATION_ID,
+                    createForegroundNotification(),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                // Toutes les versions antérieures
+                startForeground(FOREGROUND_NOTIFICATION_ID, createForegroundNotification())
+            }
+            Log.d("KUFAY_SERVICE", "Foreground service started successfully")
+        } catch (e: Exception) {
+            Log.e("KUFAY_SERVICE", "Error starting foreground service: ${e.message}")
+        }
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
 
-        // Check if this notification is from a target app
         if (!notificationUtils.isTargetPackage(packageName)) {
             return
         }
 
-        // For Google Messages, filter by keywords
         if (packageName == "com.google.android.apps.messaging") {
             val notification = sbn.notification
             val extras = notification.extras
             val title = extras.getString(Notification.EXTRA_TITLE) ?: return
 
-            // Skip if the title doesn't contain target keywords
-            if (!notificationUtils.containsTargetKeywords(title)) {
-                return
-            }
-        }
-        // Check if this notification is from a target app
-        if (!notificationUtils.isTargetPackage(packageName)) {
-            return
-        }
-
-// For Google Messages, filter by keywords
-        if (packageName == "com.google.android.apps.messaging") {
-            val notification = sbn.notification
-            val extras = notification.extras
-            val title = extras.getString(Notification.EXTRA_TITLE) ?: return
-
-            // Skip if the title doesn't contain target keywords
             if (!notificationUtils.containsTargetKeywords(title)) {
                 return
             }
 
-            // Filter out phone credit notifications for Orange Money and Mixx by Yas
             val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
             if ((title.contains("OrangeMoney", ignoreCase = true) ||
                         title.contains("Mixx by Yas", ignoreCase = true)) &&
                 (text.contains("credit telephonique", ignoreCase = true) ||
-                        text.contains("TXN Id:RC", ignoreCase = true ) ||
+                        text.contains("TXN Id:RC", ignoreCase = true) ||
                         text.contains("#123#", ignoreCase = true) ||
                         text.contains("detail des compteurs", ignoreCase = true))) {
                 Log.d("KUFAY_SERVICE", "Skipping phone credit notification: $title")
@@ -81,7 +135,6 @@ class KufayNotificationListenerService : NotificationListenerService() {
             }
         }
 
-        // Extract notification data
         processNotification(sbn)
     }
 
@@ -94,7 +147,6 @@ class KufayNotificationListenerService : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val timestamp = sbn.postTime
 
-        // Get app name (display name)
         val packageManager = applicationContext.packageManager
         val appName = try {
             val appInfo = packageManager.getApplicationInfo(packageName, 0)
@@ -103,11 +155,9 @@ class KufayNotificationListenerService : NotificationListenerService() {
             packageName.split(".").last()
         }
 
-        // Extract financial data
         val (amount, currency, labelPair) = notificationUtils.extractFinancialData(packageName, title, text)
         val (amountText, label) = labelPair
 
-        // Determine if this is an incoming transaction
         val isIncomingTransaction = when {
             packageName == "com.wave.personal" &&
                     text.contains("avez reçu", ignoreCase = true) -> true
@@ -125,7 +175,6 @@ class KufayNotificationListenerService : NotificationListenerService() {
             else -> false
         }
 
-        // Determine appTag
         val appTag = when {
             packageName == "com.wave.personal" && !title.contains("business", ignoreCase = true) -> "WAVE_PERSONAL"
             packageName == "com.wave.business" -> "WAVE_BUSINESS"
@@ -134,7 +183,6 @@ class KufayNotificationListenerService : NotificationListenerService() {
             else -> null
         }
 
-        // Create Kufay notification object
         val kufayNotification = KufayNotification(
             packageName = packageName,
             appName = appName,
@@ -146,26 +194,21 @@ class KufayNotificationListenerService : NotificationListenerService() {
             currency = currency,
             label = label,
             isIncomingTransaction = isIncomingTransaction,
-            appTag = appTag  // Add the new appTag field
+            appTag = appTag
         )
 
-        // Save to database
         serviceScope.launch {
             val notificationId = notificationRepository.saveNotification(kufayNotification)
 
-            // Check if this notification pattern is recognized and should be auto-read
             val isRecognizedPattern = notificationUtils.isRecognizedNotificationPattern(packageName, title, text)
 
-            // Log notification details and pattern recognition
             Log.d("KUFAY_SERVICE", "Saved notification: $title ($packageName)")
             Log.d("KUFAY_SERVICE", "Is recognized pattern: $isRecognizedPattern")
             Log.d("KUFAY_SERVICE", "Is incoming transaction: $isIncomingTransaction")
             Log.d("KUFAY_SERVICE", "App Tag: $appTag")
 
-            // Get the current auto-read setting from UserPreferences
             val autoReadEnabled = userPreferences.autoReadEnabled.first()
 
-            // Auto-read if enabled AND if this is a recognized notification pattern
             if (autoReadEnabled && isRecognizedPattern) {
                 ttsService.speakNotification(kufayNotification, isRecognizedPattern)
             }
@@ -177,6 +220,12 @@ class KufayNotificationListenerService : NotificationListenerService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d("KUFAY_SERVICE", "onStartCommand called")
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        Log.d("KUFAY_SERVICE", "Service destroyed")
+        super.onDestroy()
     }
 }
