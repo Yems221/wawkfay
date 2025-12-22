@@ -44,6 +44,10 @@ class KufayNotificationListenerService : NotificationListenerService() {
     @Inject
     lateinit var userPreferences: UserPreferences
 
+    // ✅ AJOUT : Injection du KufayNotificationManager
+    @Inject
+    lateinit var kufayNotificationManager: KufayNotificationManager
+
     private val serviceScope = CoroutineScope(Dispatchers.IO)
 
     private fun createNotificationChannel() {
@@ -246,6 +250,10 @@ class KufayNotificationListenerService : NotificationListenerService() {
             Log.d("KUFAY_SERVICE", "Is recognized pattern: $isRecognizedPattern")
             Log.d("KUFAY_SERVICE", "Is incoming transaction: $isIncomingTransaction")
             Log.d("KUFAY_SERVICE", "App Tag: $appTag")
+
+            // ✅ AJOUT : Afficher la notification Kufay dans la barre de notification
+            kufayNotificationManager.showKufayNotification(kufayNotification, notificationId)
+            Log.d("KUFAY_SERVICE", "📱 Notification Kufay affichée dans la barre (ID: $notificationId)")
 
             val autoReadEnabled = userPreferences.autoReadEnabled.first()
 
