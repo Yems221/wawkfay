@@ -198,8 +198,48 @@ class KufayNotificationListenerService : NotificationListenerService() {
         )
 
         serviceScope.launch {
-            val notificationId = notificationRepository.saveNotification(kufayNotification)
+            // Special handling for Mixx by Yas - check Ref first
+            val isDuplicate = if (packageName == "com.google.android.apps.messaging" &&
+                title.contains("Mixx by Yas", ignoreCase = true)) {
 
+                // Check by Ref (unique transaction ID)
+                val hasDuplicateRef = notificationRepository.isDuplicateByRef(
+                    packageName = packageName,
+                    text = text
+                )
+
+                if (hasDuplicateRef) {
+                    Log.d("KUFAY_SERVICE", "🚫 DOUBLON MIXX DÉTECTÉ (Ref identique) - notification ignorée")
+                    true
+                } else {
+                    // Fallback: check by amount + time window
+                    amount?.let { validAmount ->
+                        notificationRepository.isDuplicate(
+                            packageName = packageName,
+                            amount = validAmount,
+                            timestamp = timestamp,
+                            timeWindowMs = 5000
+                        )
+                    } ?: false
+                }
+            } else {
+                // Pour autres apps: check normal par montant + timestamp
+                amount?.let { validAmount ->
+                    notificationRepository.isDuplicate(
+                        packageName = packageName,
+                        amount = validAmount,
+                        timestamp = timestamp,
+                        timeWindowMs = 5000
+                    )
+                } ?: false
+            }
+
+            if (isDuplicate) {
+                Log.d("KUFAY_SERVICE", "🚫 DOUBLON DÉTECTÉ - notification ignorée: $title (${amount ?: "N/A"} $currency)")
+                return@launch
+            }
+
+            val notificationId = notificationRepository.saveNotification(kufayNotification)
             val isRecognizedPattern = notificationUtils.isRecognizedNotificationPattern(packageName, title, text)
 
             Log.d("KUFAY_SERVICE", "Saved notification: $title ($packageName)")
