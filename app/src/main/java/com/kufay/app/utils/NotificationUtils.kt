@@ -206,7 +206,7 @@ class NotificationUtils @Inject constructor(
                 if (specificMatch != null) {
                     val amountStr = specificMatch.groupValues[1]
                     // For Orange Money, treat periods as decimal separators
-                    val parsedAmount = if (title.contains("OrangeMoney", ignoreCase = true) && amountStr.contains(".")) {
+                    val parsedAmount = if ((title.contains("OrangeMoney", ignoreCase = true) || title.contains("Mixx by Yas", ignoreCase = true)) && amountStr.contains(".")) {
                         // For Orange Money, keep the number before decimal point
                         val parts = amountStr.split(".")
                         parts[0].replace(",", "").toDoubleOrNull()
@@ -225,7 +225,7 @@ class NotificationUtils @Inject constructor(
                 if (match != null) {
                     val amountStr = match.groupValues[1]
                     // Apply the same Orange Money-specific handling
-                    val parsedAmount = if (title.contains("OrangeMoney", ignoreCase = true) && amountStr.contains(".")) {
+                    val parsedAmount = if ((title.contains("OrangeMoney", ignoreCase = true) || title.contains("Mixx by Yas", ignoreCase = true)) && amountStr.contains(".")) {
                         val parts = amountStr.split(".")
                         parts[0].replace(",", "").toDoubleOrNull()
                     } else {
