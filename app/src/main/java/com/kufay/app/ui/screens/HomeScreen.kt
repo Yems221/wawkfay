@@ -1559,193 +1559,39 @@ private fun CalendarDay(
             }
         )
     }
+}  // ✅ FERMER ICI - C'EST CRUCIAL
 
-    // Helper component for date selection in date range picker
-    @Composable
-    fun DateSelector(
-        initialDate: Long,
-        onDateChange: (Long) -> Unit
-    ) {
-        val calendar = remember { Calendar.getInstance().apply { timeInMillis = initialDate } }
-        var year by remember { mutableStateOf(calendar.get(Calendar.YEAR)) }
-        var month by remember { mutableStateOf(calendar.get(Calendar.MONTH)) }
-        var day by remember { mutableStateOf(calendar.get(Calendar.DAY_OF_MONTH)) }
+// Helper function to get month name - VERSION CORRECTE
+fun getMonthName(month: Int): String {
+    return when (month) {
+        0 -> "January"
+        1 -> "February"
+        2 -> "March"
+        3 -> "April"
+        4 -> "May"
+        5 -> "June"
+        6 -> "July"
+        7 -> "August"
+        8 -> "September"
+        9 -> "October"
+        10 -> "November"
+        11 -> "December"
+        else -> "Unknown"
+    }
+}
 
-        // Update the date whenever year, month or day changes
-        LaunchedEffect(year, month, day) {
-            calendar.set(year, month, day)
-            onDateChange(calendar.timeInMillis)
-        }
+@Composable
+fun AdMobBanner(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
 
-        // Compact date selector
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Day
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = {
-                    if (day > 1) day-- else {
-                        // Move to previous month
-                        if (month > 0) month-- else {
-                            month = 11
-                            year--
-                        }
-                        // Set day to last day of the month
-                        calendar.set(year, month, 1)
-                        day = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-                    }
-                }) {
-                    Icon(
-                        Icons.Default.Remove,
-                        contentDescription = "Previous Day",
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Text(day.toString(), style = MaterialTheme.typography.bodyLarge)
-                IconButton(onClick = {
-                    // Calculate max days in current month
-                    calendar.set(year, month, 1)
-                    val maxDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-                    if (day < maxDay) day++ else {
-                        day = 1
-                        if (month < 11) month++ else {
-                            month = 0
-                            year++
-                        }
-                    }
-                }) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Next Day",
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            Text("/", style = MaterialTheme.typography.titleMedium)
-
-            // Month
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = {
-                    if (month > 0) month-- else {
-                        month = 11
-                        year--
-                    }
-                }) {
-                    Icon(
-                        Icons.Default.Remove,
-                        contentDescription = "Previous Month",
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Text(
-                    (month + 1).toString().padStart(2, '0'),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                IconButton(onClick = {
-                    if (month < 11) month++ else {
-                        month = 0
-                        year++
-                    }
-                }) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Next Month",
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            Text("/", style = MaterialTheme.typography.titleMedium)
-
-            // Year
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = { year-- }) {
-                    Icon(
-                        Icons.Default.Remove,
-                        contentDescription = "Previous Year",
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Text(year.toString(), style = MaterialTheme.typography.bodyLarge)
-                IconButton(onClick = { year++ }) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Next Year",
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx: Context ->
+            AdView(ctx).apply {
+                setAdSize(AdSize.BANNER)
+                adUnitId = "ca-app-pub-5150393955061751/5025492745"
+                loadAd(AdRequest.Builder().build())
             }
         }
-    }
-
-    // Helper component for date range selection tabs
-    @Composable
-    fun TabButton(
-        text: String,
-        isSelected: Boolean,
-        onClick: () -> Unit,
-        modifier: Modifier = Modifier
-    ) {
-        Box(
-            modifier = modifier
-                .padding(4.dp)
-                .height(40.dp)
-                .fillMaxWidth()
-                .background(
-                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                    else Color.Transparent,
-                    RoundedCornerShape(8.dp)
-                )
-                .clickable(onClick = onClick)
-                .padding(8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray
-            )
-        }
-    }
-
-    // Helper function to get month name
-    fun getMonthName(month: Int): String {
-        return when (month) {
-            0 -> "January"
-            1 -> "February"
-            2 -> "March"
-            3 -> "April"
-            4 -> "May"
-            5 -> "June"
-            6 -> "July"
-            7 -> "August"
-            8 -> "September"
-            9 -> "October"
-            10 -> "November"
-            11 -> "December"
-            else -> "Unknown"
-        }
-    }
-
-    @Composable
-    fun AdMobBanner(modifier: Modifier = Modifier) {
-        val context = LocalContext.current
-
-        AndroidView(
-            modifier = modifier,
-            factory = { ctx: Context ->
-                AdView(ctx).apply {
-                    setAdSize(AdSize.BANNER)
-                    adUnitId =
-                        "ca-app-pub-5150393955061751/5025492745" // Remplace par ton propre ID
-                    loadAd(AdRequest.Builder().build())
-                }
-            }
-        )
-    }
+    )
 }
