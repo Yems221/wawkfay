@@ -57,4 +57,58 @@
     <string name="about">About Kufay</string>
     <string name="version">Version 1.0.0</string>
     <string name="app_description">Kufay helps you track and manage your financial notifications.</string>
+
+    <!-- NEW: Modern Date Picker Strings - ADD BEFORE </resources> -->
+    <string name="select_date_range">Select Date Range</string>
+    <string name="from">From:</string>
+    <string name="to">To:</string>
+    <string name="quick_select">Quick Select:</string>
+    <string name="last_7_days">Last 7d</string>
+    <string name="last_30_days">Last 30d</string>
+    <string name="this_week">This Week</string>
+    <string name="this_month">This Month</string>
+    <string name="this_year">This Year</string>
+    <string name="selected_range">Selected Range</string>
+    <string name="calendar_icon">📅</string>
+
+    <!-- Calendar Navigation -->
+    <string name="previous_month">Previous month</string>
+    <string name="next_month">Next month</string>
+
+    <!-- Days of week (short) -->
+    <string name="day_mon">Mo</string>
+    <string name="day_tue">Tu</string>
+    <string name="day_wed">We</string>
+    <string name="day_thu">Th</string>
+    <string name="day_fri">Fr</string>
+    <string name="day_sat">Sa</string>
+    <string name="day_sun">Su</string>
+
+    <!-- Months (for calendar) -->
+    <string name="month_january">January</string>
+    <string name="month_february">February</string>
+    <string name="month_march">March</string>
+    <string name="month_april">April</string>
+    <string name="month_may">May</string>
+    <string name="month_june">June</string>
+    <string name="month_july">July</string>
+    <string name="month_august">August</string>
+    <string name="month_september">September</string>
+    <string name="month_october">October</string>
+    <string name="month_november">November</string>
+    <string name="month_december">December</string>
+
+    <!-- Short month names for date display -->
+    <string name="month_jan_short">Jan</string>
+    <string name="month_feb_short">Feb</string>
+    <string name="month_mar_short">Mar</string>
+    <string name="month_apr_short">Apr</string>
+    <string name="month_may_short">May</string>
+    <string name="month_jun_short">Jun</string>
+    <string name="month_jul_short">Jul</string>
+    <string name="month_aug_short">Aug</string>
+    <string name="month_sep_short">Sep</string>
+    <string name="month_oct_short">Oct</string>
+    <string name="month_nov_short">Nov</string>
+    <string name="month_dec_short">Dec</string>
 </resources>
