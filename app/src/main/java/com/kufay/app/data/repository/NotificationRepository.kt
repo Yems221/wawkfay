@@ -38,6 +38,20 @@ class NotificationRepository @Inject constructor(
     suspend fun saveNotification(notification: Notification): Long =
         notificationDao.insert(notification)
 
+    suspend fun isDuplicate(
+        packageName: String,
+        amount: Double,
+        timestamp: Long,
+        timeWindowMs: Long = 3000 // 5 secondes par défaut
+    ): Boolean {
+        return notificationDao.checkDuplicate(
+            packageName = packageName,
+            amount = amount,
+            timestampStart = timestamp - timeWindowMs,
+            timestampEnd = timestamp + timeWindowMs
+        ) > 0
+    }
+
     suspend fun moveToTrash(id: Long, deleteAfterDays: Int = 30) {
         val deletionDate = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_YEAR, deleteAfterDays)
