@@ -52,6 +52,27 @@ class NotificationRepository @Inject constructor(
         ) > 0
     }
 
+    suspend fun isDuplicateByRef(
+        packageName: String,
+        text: String
+    ): Boolean {
+        // Extraire la Ref du texte
+        val refRegex = """Ref:\s*([A-Z0-9.]+)""".toRegex(RegexOption.IGNORE_CASE)
+        val refMatch = refRegex.find(text)
+
+        if (refMatch != null) {
+            val ref = refMatch.groupValues[1].trim()
+            Log.d("KUFAY_DUPLICATE", "Checking duplicate for Ref: $ref")
+
+            return notificationDao.checkDuplicateByRef(
+                packageName = packageName,
+                ref = ref
+            ) > 0
+        }
+
+        return false
+    }
+
     suspend fun moveToTrash(id: Long, deleteAfterDays: Int = 30) {
         val deletionDate = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_YEAR, deleteAfterDays)
