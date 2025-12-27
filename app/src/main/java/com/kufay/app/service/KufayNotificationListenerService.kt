@@ -257,7 +257,7 @@ class KufayNotificationListenerService : NotificationListenerService() {
 
             val autoReadEnabled = userPreferences.autoReadEnabled.first()
 
-            if (autoReadEnabled && isRecognizedPattern) {
+            if (autoReadEnabled && isRecognizedPattern && isIncomingTransaction) {
                 ttsService.speakNotification(kufayNotification, isRecognizedPattern)
             }
         }
