@@ -735,7 +735,7 @@ class TTSService @Inject constructor(
                     }
                 }
 
-                playWolofRecordingWithText("wave_personal_received", "$amount Franc C F A a $sender")
+                playWolofRecordingWithText("wave_personal_received", "$amount Franc C F A de $sender")
             }
 
             // Fallback to regular TTS for unhandled cases
