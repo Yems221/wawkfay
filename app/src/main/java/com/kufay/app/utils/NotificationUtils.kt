@@ -39,14 +39,71 @@ class NotificationUtils @Inject constructor(
         Log.d("KUFAY_DEBUG", "Extracting financial data for: $packageName, title: $title")
         Log.d("KUFAY_DEBUG", "Text content: $text")
 
-        // WAVE PERSONAL
+        // ===== WAVE PERSONAL =====
         if (packageName == "com.wave.personal") {
-            // N1: Payment made - "Paiement réussi!"
-            if (title.contains("Paiement réussi", ignoreCase = true)) {
-                // SPECIFICALLY look for the first amount "Vous avez payé" or "payé" BEFORE "Solde Wave"
-                // The text typically follows pattern: "Vous avez payé XXF à [recipient]. Solde Wave: YYF"
 
-                // First attempt - exact pattern including "à" to make sure we get payment amount
+            // ✅ NEW: ENGLISH - Transfer received
+            if (title.contains("Transfer received", ignoreCase = true) ||
+                text.contains("You received", ignoreCase = true)) {
+
+                val receivedRegex = """You received\s+(\d+(?:,\d+)?(?:\.\d+)?)\s*F""".toRegex(RegexOption.IGNORE_CASE)
+                val match = receivedRegex.find(text)
+
+                if (match != null) {
+                    val amountText = match.groupValues[1]
+                    val numericValue = amountText.replace(",", "").replace("F", "").toDoubleOrNull()
+
+                    // Extract sender: "From [name] ([phone])"
+                    val senderRegex = """From\s+([^(]+)(?:\s*\()?""".toRegex(RegexOption.IGNORE_CASE)
+                    val sender = senderRegex.find(text)?.groupValues?.getOrNull(1)?.trim()
+
+                    Log.d("KUFAY_DEBUG", "Wave Transfer Received (EN): $amountText, value: $numericValue, sender: $sender")
+                    return Triple(numericValue, "Franc CFA", Pair(amountText + "F", sender))
+                }
+            }
+
+            // ✅ NEW: ENGLISH - Transfer sent
+            else if (title.contains("Transfer sent", ignoreCase = true) ||
+                text.contains("You sent", ignoreCase = true)) {
+
+                val sentRegex = """You sent\s+(\d+(?:,\d+)?(?:\.\d+)?)\s*F""".toRegex(RegexOption.IGNORE_CASE)
+                val match = sentRegex.find(text)
+
+                if (match != null) {
+                    val amountText = match.groupValues[1]
+                    val numericValue = amountText.replace(",", "").replace("F", "").toDoubleOrNull()
+
+                    // Extract recipient: "To [name] ([phone])"
+                    val recipientRegex = """To\s+([^(]+)(?:\s*\()?""".toRegex(RegexOption.IGNORE_CASE)
+                    val recipient = recipientRegex.find(text)?.groupValues?.getOrNull(1)?.trim()
+
+                    Log.d("KUFAY_DEBUG", "Wave Transfer Sent (EN): $amountText, value: $numericValue, recipient: $recipient")
+                    return Triple(numericValue, "Franc CFA", Pair(amountText + "F", recipient))
+                }
+            }
+
+            // ✅ NEW: ENGLISH - Payment made
+            else if (title.contains("Payment successful", ignoreCase = true) ||
+                text.contains("You have paid", ignoreCase = true)) {
+
+                val paymentRegex = """You have paid\s+(\d+(?:,\d+)?(?:\.\d+)?)\s*F""".toRegex(RegexOption.IGNORE_CASE)
+                val match = paymentRegex.find(text)
+
+                if (match != null) {
+                    val amountText = match.groupValues[1]
+                    val numericValue = amountText.replace(",", "").replace("F", "").toDoubleOrNull()
+
+                    // Extract merchant: "at [merchant name]"
+                    val merchantRegex = """at\s+([^\n\.]+)""".toRegex(RegexOption.IGNORE_CASE)
+                    val merchant = merchantRegex.find(text)?.groupValues?.getOrNull(1)?.trim()
+
+                    Log.d("KUFAY_DEBUG", "Wave Payment (EN): $amountText, value: $numericValue, merchant: $merchant")
+                    return Triple(numericValue, "Franc CFA", Pair(amountText + "F", merchant))
+                }
+            }
+
+            // FRANÇAIS - Payment made - "Paiement réussi!"
+            else if (title.contains("Paiement réussi", ignoreCase = true)) {
                 val specificPaymentRegex = """(?:Vous avez payé|payé)\s+(\d+(?:\.\d+)?F)(?:\s+à)""".toRegex()
                 val specificMatch = specificPaymentRegex.find(text)
 
@@ -57,12 +114,10 @@ class NotificationUtils @Inject constructor(
                     return Triple(numericValue, "Franc CFA", Pair(amountText, extractLabel(text)))
                 }
 
-                // Second attempt - look for amount before "Solde Wave"
                 val paymentPattern = """(?:Vous avez payé|payé)\s+(\d+(?:\.\d+)?F)""".toRegex()
                 val match = paymentPattern.find(text)
 
                 if (match != null) {
-                    // Make sure this is not the balance amount
                     val amountPosition = match.range.first
                     val soldePosition = text.indexOf("Solde Wave", ignoreCase = true)
 
@@ -75,12 +130,8 @@ class NotificationUtils @Inject constructor(
                 }
             }
 
-            // N2: Transfer sent - "Transfert réussi!"
+            // FRANÇAIS - Transfer sent - "Transfert réussi!"
             else if (title.contains("Transfert réussi", ignoreCase = true)) {
-                // Specifically look for "Vous avez envoyé XXF" - before any "Frais" or "Nouveau solde"
-                // The text typically follows pattern: "Vous avez envoyé XXF à [recipient]. Frais: YYF. Nouveau solde: ZZF"
-
-                // First attempt - exact pattern to make sure we get the sent amount
                 val specificTransferRegex = """Vous avez envoyé\s+(\d+(?:\.\d+)?F)""".toRegex()
                 val specificMatch = specificTransferRegex.find(text)
 
@@ -91,12 +142,10 @@ class NotificationUtils @Inject constructor(
                     return Triple(numericValue, "Franc CFA", Pair(amountText, extractLabel(text)))
                 }
 
-                // Second attempt - broader pattern but check positions
                 val transferRegex = """(?:Vous avez envoyé|envoyé)\s+(\d+(?:\.\d+)?F)""".toRegex()
                 val match = transferRegex.find(text)
 
                 if (match != null) {
-                    // Make sure this is not the fees or balance amount
                     val amountPosition = match.range.first
                     val fraisPosition = text.indexOf("Frais", ignoreCase = true)
                     val soldePosition = text.indexOf("Nouveau solde", ignoreCase = true)
@@ -111,9 +160,8 @@ class NotificationUtils @Inject constructor(
                 }
             }
 
-            // N3: Transfer received - "Transfert reçu"
+            // FRANÇAIS - Transfer received - "Transfert reçu"
             else if (title.contains("Transfert reçu", ignoreCase = true)) {
-                // Look for pattern "Vous avez reçu XXF"
                 val receivedRegex = """Vous avez reçu\s+(\d+(?:\.\d+)?F)""".toRegex()
                 val match = receivedRegex.find(text)
 
@@ -126,9 +174,9 @@ class NotificationUtils @Inject constructor(
             }
         }
 
-        // WAVE BUSINESS
+        // ===== WAVE BUSINESS =====
         else if (packageName == "com.wave.business") {
-            // N1: Transfer sent - "Transfert envoyé"
+            // Transfer sent - "Transfert envoyé"
             if (title.contains("Transfert envoyé", ignoreCase = true)) {
                 val transferRegex = """(?:Vous avez envoyé|envoyé)\s+(\d+(?:\.\d+)?F)""".toRegex()
                 val match = transferRegex.find(text)
@@ -141,23 +189,19 @@ class NotificationUtils @Inject constructor(
                 }
             }
 
-            // N2: Zero fees notification (Zéro frais) with "sur votre encaissement de"
+            // Zero fees notification (Zéro frais) with "sur votre encaissement de"
             else if (text.contains("sur votre encaissement de", ignoreCase = true)) {
-                // Modified pattern to be more precise with looser matching for the amount
                 val encaissementRegex = """sur votre encaissement de\s+(\d+(?:[.,]\d+)?)""".toRegex(RegexOption.IGNORE_CASE)
                 val match = encaissementRegex.find(text)
 
                 if (match != null) {
                     var amountText = match.groupValues[1]
-                    // Add F if not present
                     if (!amountText.endsWith("F", ignoreCase = true)) {
                         amountText += "F"
                     }
-                    // Clean up the amount - replace both dots and commas
                     val numericValue = amountText.replace("F", "").replace(".", "").replace(",", "").toDoubleOrNull()
                     Log.d("KUFAY_DEBUG", "Wave Business Receipt: $amountText, value: $numericValue")
 
-                    // For business encaissements, try to extract recipient name
                     val recipient = if (text.contains("themo i bah", ignoreCase = true)) {
                         "themo i bah"
                     } else {
@@ -168,25 +212,21 @@ class NotificationUtils @Inject constructor(
                 }
             }
 
-            // N3: À DISTANCE reçu - payment received at a distance
+            // À DISTANCE reçu - payment received at a distance
             else if (text.contains("À DISTANCE reçu", ignoreCase = true) ||
                 text.contains("A DISTANCE reçu", ignoreCase = true)) {
 
-                // Extract amount - look for the pattern "a payé X F"
                 val paymentRegex = """a payé\s+(\d+(?:[.,]\d+)?(?:F|))""".toRegex(RegexOption.IGNORE_CASE)
                 val amountMatch = paymentRegex.find(text)
 
                 if (amountMatch != null) {
                     var amountText = amountMatch.groupValues[1]
-                    // Add F if not present
                     if (!amountText.endsWith("F", ignoreCase = true)) {
                         amountText += "F"
                     }
-                    // Clean up the amount
                     val numericValue = amountText.replace("F", "").replace(".", "").replace(",", "").toDoubleOrNull()
                     Log.d("KUFAY_DEBUG", "Wave Business DISTANCE reçu: $amountText, value: $numericValue")
 
-                    // Extract sender name - between "DISTANCE reçu:" and "a payé"
                     val senderRegex = """DISTANCE reçu:\s*([^(]*)(?:\(|a)""".toRegex(RegexOption.IGNORE_CASE)
                     val sender = senderRegex.find(text)?.groupValues?.getOrNull(1)?.trim() ?: extractLabel(text)
 
@@ -195,36 +235,29 @@ class NotificationUtils @Inject constructor(
             }
         }
 
-        // ORANGE MONEY & MIXX (SMS messages)
-        // Modified extractFinancialData method for Orange Money SMS notifications
+        // ===== ORANGE MONEY & MIXX (SMS messages) =====
         else if (packageName == "com.google.android.apps.messaging") {
             if (title.contains("OrangeMoney", ignoreCase = true) || title.contains("Mixx by Yas", ignoreCase = true)) {
-                // First try to find a specific amount pattern with currency indicators
                 val specificPattern = """(\d+(?:,\d+)?(?:\.\d+)?)\s*(?:F|CFA|XOF)""".toRegex(RegexOption.IGNORE_CASE)
                 val specificMatch = specificPattern.find(text)
 
                 if (specificMatch != null) {
                     val amountStr = specificMatch.groupValues[1]
-                    // For Orange Money, treat periods as decimal separators
                     val parsedAmount = if ((title.contains("OrangeMoney", ignoreCase = true) || title.contains("Mixx by Yas", ignoreCase = true)) && amountStr.contains(".")) {
-                        // For Orange Money, keep the number before decimal point
                         val parts = amountStr.split(".")
                         parts[0].replace(",", "").toDoubleOrNull()
                     } else {
-                        // For other services, treat periods as thousand separators
                         amountStr.replace(",", "").replace(".", "").toDoubleOrNull()
                     }
                     Log.d("KUFAY_DEBUG", "Orange Money/Mixx amount: $amountStr, parsed: $parsedAmount")
                     return Triple(parsedAmount, "Franc CFA", Pair(amountStr, extractLabel(text)))
                 }
 
-                // Similar logic for the fallback pattern
                 val generalPattern = """(\d+(?:,\d+)?(?:\.\d+)?)""".toRegex()
                 val match = generalPattern.find(text)
 
                 if (match != null) {
                     val amountStr = match.groupValues[1]
-                    // Apply the same Orange Money-specific handling
                     val parsedAmount = if ((title.contains("OrangeMoney", ignoreCase = true) || title.contains("Mixx by Yas", ignoreCase = true)) && amountStr.contains(".")) {
                         val parts = amountStr.split(".")
                         parts[0].replace(",", "").toDoubleOrNull()
@@ -237,7 +270,7 @@ class NotificationUtils @Inject constructor(
             }
         }
 
-        // Fallback extraction if no specific pattern matched
+        // Fallback extraction
         val (amount, amountText) = extractAmount(text, packageName, title)
         val currency = formatCurrency(packageName, title)
         val label = extractLabel(text)
@@ -254,28 +287,25 @@ class NotificationUtils @Inject constructor(
         Log.d("KUFAY_DEBUG", "Package name: $packageName, isWave: $isWave")
 
         if (isWave) {
-            // WAVE PERSONAL: Payment notification - extract first amount before "Solde Wave"
             if (packageName == "com.wave.personal" && title.contains("Paiement réussi", ignoreCase = true)) {
-                // First try to find the amount right before "à"
                 val specificPattern = """(?:Vous avez payé|payé)\s+(\d+(?:\.\d{3})*F?)(?:\s+à)""".toRegex()
                 val specificMatch = specificPattern.find(text)
 
                 if (specificMatch != null) {
                     val amountText = specificMatch.groupValues[1]
                     val numericValue = amountText
-                        .replace("F", "")     // Remove currency symbol
-                        .replace(".", "")     // Remove thousand separators
+                        .replace("F", "")
+                        .replace(".", "")
                         .toDoubleOrNull()
                     Log.d("KUFAY_DEBUG", "Found specific payment amount: $amountText ($numericValue)")
                     return Pair(numericValue, amountText)
                 }
 
-                // Then try to find any amount that comes before "Solde Wave"
                 val soldePosition = text.indexOf("Solde Wave", ignoreCase = true)
                 if (soldePosition > 0) {
                     val textBeforeSolde = text.substring(0, soldePosition)
                     val amountPattern = """(\d+(?:\.\d{3})*F?)""".toRegex()
-                    val match = amountPattern.findAll(textBeforeSolde).lastOrNull() // Get the last one before "Solde"
+                    val match = amountPattern.findAll(textBeforeSolde).lastOrNull()
 
                     if (match != null) {
                         val amountText = match.groupValues[1]
@@ -288,38 +318,28 @@ class NotificationUtils @Inject constructor(
                     }
                 }
             }
-
-            // Similar detailed modifications for other Wave scenarios...
-            // (Transfer sent, Transfer received, Business notifications)
-            // [Rest of the existing Wave-specific parsing logic would remain largely the same]
-            // Just replace the numeric value extraction with the thousand separator removal method
         }
 
-        // Special handling for Orange Money and Mixx
         if (packageName == "com.google.android.apps.messaging") {
             if (title.contains("OrangeMoney", ignoreCase = true) || title.contains("Mixx by Yas", ignoreCase = true)) {
-                // First try to find a specific amount pattern with currency indicators
                 val specificPattern = """(\d+(?:,\d+)?(?:\.\d+)?)\s*(?:F|CFA|XOF)""".toRegex(RegexOption.IGNORE_CASE)
                 val specificMatch = specificPattern.find(text)
 
                 if (specificMatch != null) {
                     val amountStr = specificMatch.groupValues[1]
-                    // FIXED: Always treat periods as thousand separators
                     val parsedAmount = amountStr
-                        .replace(",", "")  // Remove comma separators
-                        .replace(".", "")  // Remove periods (treat as thousand separators)
+                        .replace(",", "")
+                        .replace(".", "")
                         .toDoubleOrNull()
 
                     return Pair(parsedAmount, amountStr)
                 }
 
-                // Fallback to general number pattern
                 val generalPattern = """(\d+(?:,\d+)?(?:\.\d+)?)""".toRegex()
                 val match = generalPattern.find(text)
 
                 if (match != null) {
                     val amountStr = match.groupValues[1]
-                    // FIXED: Always treat periods as thousand separators
                     val parsedAmount = amountStr
                         .replace(",", "")
                         .replace(".", "")
@@ -330,15 +350,12 @@ class NotificationUtils @Inject constructor(
             }
         }
 
-        // Fallback parsing remains the same, with thousand separator handling
         val generalPattern = """(\d+(?:,\d+)?(?:\.\d+)?)""".toRegex()
         val match = generalPattern.find(text) ?: return Pair(null, null)
         val amountStr = match.groupValues[1]
 
         Log.d("KUFAY_DEBUG", "Fallback pattern matched: '$amountStr'")
 
-        // FIXED: Consistent parsing for all payment services
-        // Parse amount by removing ALL periods and commas
         val parsedAmount = amountStr
             .replace(".", "")
             .replace(",", "")
@@ -360,30 +377,40 @@ class NotificationUtils @Inject constructor(
     }
 
     private fun extractLabel(text: String): String? {
-        // New pattern: Extract sender for received money
+        // ✅ NEW: Extract sender for ENGLISH received money
+        val receivedMoneyEnRegex = """You received\s+\d+(?:,\d+)?(?:\.\d+)?\s*F\s+[Ff]rom\s+([^(]+)""".toRegex()
+        receivedMoneyEnRegex.find(text)?.groupValues?.getOrNull(1)?.let {
+            return it.trim()
+        }
+
+        // FRANÇAIS: Extract sender for received money
         val receivedMoneyRegex = """Vous avez reçu\s+\d+(?:\.\d+)?F\s+de\s+([^\.]+)""".toRegex()
         receivedMoneyRegex.find(text)?.groupValues?.getOrNull(1)?.let {
             return it.trim()
         }
 
-        // Extract recipient for Wave payments
+        // ✅ NEW: Extract merchant for ENGLISH payments
+        val merchantEnRegex = """at\s+([^\n\.]+)""".toRegex(RegexOption.IGNORE_CASE)
+        merchantEnRegex.find(text)?.groupValues?.getOrNull(1)?.let {
+            return it.trim()
+        }
+
+        // FRANÇAIS: Extract recipient for Wave payments
         val waveRecipientRegex = """(?:payé \d+(?:\.\d+)?F à|à)\s+([^\.]+)""".toRegex()
         waveRecipientRegex.find(text)?.groupValues?.getOrNull(1)?.let {
             return it.trim()
         }
 
-        // Extract recipient for Wave transfers
+        // FRANÇAIS: Extract recipient for Wave transfers
         val transferRecipientRegex = """A ([^\(]+)""".toRegex()
         transferRecipientRegex.find(text)?.groupValues?.getOrNull(1)?.let {
             return it.trim()
         }
 
-        // Extract special recipient "themo i bah" that appears in many examples
         if (text.contains("themo i bah", ignoreCase = true)) {
             return "themo i bah"
         }
 
-        // General label regex as fallback
         val labelRegex = """for\s+(.+?)(?:\s+at|\s*$)""".toRegex(RegexOption.IGNORE_CASE)
         return labelRegex.find(text)?.groupValues?.getOrNull(1)
     }
@@ -393,8 +420,17 @@ class NotificationUtils @Inject constructor(
     }
 
     fun isRecognizedNotificationPattern(packageName: String, title: String, text: String): Boolean {
-        // Wave Personal recognized patterns
+        // ✅ Wave Personal - ENGLISH patterns
         if (packageName == "com.wave.personal") {
+            if (title.contains("Transfer received", ignoreCase = true) ||
+                title.contains("Payment successful", ignoreCase = true) ||
+                text.contains("You received", ignoreCase = true) ||
+                text.contains("You sent", ignoreCase = true) ||
+                text.contains("You have paid", ignoreCase = true)) {
+                return true
+            }
+
+            // FRANÇAIS patterns (existants)
             if (title.contains("Paiement réussi", ignoreCase = true) ||
                 title.contains("Transfert reçu", ignoreCase = true)) {
                 return true
@@ -419,7 +455,7 @@ class NotificationUtils @Inject constructor(
             }
         }
 
-        // Mixx by Yas - ONLY recognize notifications with "envoyé" or "reçu"
+        // Mixx by Yas
         else if (packageName == "com.google.android.apps.messaging" &&
             title.contains("Mixx by Yas", ignoreCase = true)) {
             val hasEnvoye = text.contains("envoy", ignoreCase = true)
@@ -429,7 +465,6 @@ class NotificationUtils @Inject constructor(
             return hasEnvoye || hasRecu
         }
 
-        // Unrecognized pattern - capture but don't auto-read
         return false
     }
 }
