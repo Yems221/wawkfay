@@ -29,23 +29,18 @@ class TTSService @Inject constructor(
     private var tts: TextToSpeech? = null
     private val prefs = context.getSharedPreferences("kufay_preferences", Context.MODE_PRIVATE)
     private val serviceScope = CoroutineScope(Dispatchers.IO)
-    // Cache de déduplication pour éviter les doubles lectures
-    private val recentlySpokenNotifications = mutableMapOf<Long, Long>() // notificationId -> timestamp
-    private val SPEECH_COOLDOWN_MS = 3000L // 3 secondes minimum entre lectures de la même notification
-    private val MAX_CACHE_SIZE = 20 // Garder seulement les 20 dernières notifications
+    private val recentlySpokenNotifications = mutableMapOf<Long, Long>()
+    private val SPEECH_COOLDOWN_MS = 3000L
+    private val MAX_CACHE_SIZE = 20
 
     init {
         tts = TextToSpeech(context, this)
-        // Subscribe to preference changes
         serviceScope.launch {
             observePreferences()
         }
     }
 
-    // New method to observe preference changes
-    // Chaque collect dans son propre launch pour éviter les conflits
     private suspend fun observePreferences() {
-        // Observe speech rate changes
         serviceScope.launch {
             userPreferences.ttsSpeechRate.collect { newRate ->
                 Log.d("KUFAY_TTS", "Speech rate changed to: $newRate")
@@ -55,7 +50,6 @@ class TTSService @Inject constructor(
             }
         }
 
-        // Observe speech pitch changes
         serviceScope.launch {
             userPreferences.ttsSpeechPitch.collect { newPitch ->
                 Log.d("KUFAY_TTS", "Speech pitch changed to: $newPitch")
@@ -65,7 +59,6 @@ class TTSService @Inject constructor(
             }
         }
 
-        // Observe voice gender changes
         serviceScope.launch {
             userPreferences.ttsVoiceGender.collect { newGender ->
                 Log.d("KUFAY_TTS", "Voice gender changed to: $newGender")
@@ -75,7 +68,6 @@ class TTSService @Inject constructor(
             }
         }
 
-        // Observe language changes
         serviceScope.launch {
             userPreferences.ttsLanguage.collect { newLanguage ->
                 Log.d("KUFAY_TTS", "Language changed to: $newLanguage")
@@ -86,11 +78,10 @@ class TTSService @Inject constructor(
         }
     }
 
-    // New method to set language
     private fun setLanguage(languageCode: String) {
         val locale = when (languageCode) {
             "fr" -> Locale.FRENCH
-            "wo" -> Locale.FRENCH // Default to French for Wolof TTS parts
+            "wo" -> Locale.FRENCH
             else -> Locale.FRENCH
         }
 
@@ -98,13 +89,10 @@ class TTSService @Inject constructor(
         if (result == TextToSpeech.LANG_MISSING_DATA ||
             result == TextToSpeech.LANG_NOT_SUPPORTED
         ) {
-            // Fallback to English if preferred language is not available
             tts?.setLanguage(Locale.ENGLISH)
         }
     }
 
-    // Mapping of notification types to Wolof audio recording filenames
-    // Dans TTSService.kt
     private val WOLOF_RECORDINGS = mapOf(
         "wave_business_payment" to R.raw.wolof_wave_business_payment,
         "wave_business_encaissement" to R.raw.wolof_wave_business_encaissement,
@@ -119,26 +107,14 @@ class TTSService @Inject constructor(
         "wave_personal_received" to R.raw.wolof_wave_personal_received
     )
 
-    /**
-     * Refreshes TTS settings from preferences
-     * Called when settings are changed to apply them immediately
-     */
-    // In TTSService.kt
-
-// Modify the refreshTtsSettings method to properly apply settings
-    // In TTSService.kt
-
-// Make sure we immediately apply settings on init
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             Log.d("KUFAY_TTS", "TTS Engine initialized successfully")
 
-            // Get initial settings from DataStore in a blocking way (just for init)
             val initialLanguage = runBlocking { userPreferences.ttsLanguage.first() }
             val initialRate = runBlocking { userPreferences.ttsSpeechRate.first() }
             val initialPitch = runBlocking { userPreferences.ttsSpeechPitch.first() }
 
-            // Apply initial settings
             setLanguage(initialLanguage)
             tts?.setSpeechRate(initialRate)
             tts?.setPitch(initialPitch)
@@ -153,15 +129,13 @@ class TTSService @Inject constructor(
         }
     }
 
-    // Create a new comprehensive method to apply all settings
     private fun applyAllTtsSettings() {
-        // 1. Apply language
         val languageCode = prefs.getString("tts_language", "fr")
         Log.d("KUFAY_TTS", "Setting language to: $languageCode")
 
         val locale = when (languageCode) {
             "fr" -> Locale.FRENCH
-            "wo" -> Locale.FRENCH // Default to French for Wolof TTS parts
+            "wo" -> Locale.FRENCH
             else -> Locale.FRENCH
         }
 
@@ -171,44 +145,34 @@ class TTSService @Inject constructor(
             tts?.setLanguage(Locale.ENGLISH)
         }
 
-        // 2. Apply speech rate - be explicit with the value we're getting
         val speechRateStr = prefs.getFloat("tts_speech_rate", 1.0f).toString()
         val speechRate = speechRateStr.toFloatOrNull() ?: 1.0f
         Log.d("KUFAY_TTS", "Setting speech rate to: $speechRate")
         tts?.setSpeechRate(speechRate)
 
-        // 3. Apply pitch - be explicit with the value we're getting
         val speechPitchStr = prefs.getFloat("tts_speech_pitch", 1.0f).toString()
         val speechPitch = speechPitchStr.toFloatOrNull() ?: 1.0f
         Log.d("KUFAY_TTS", "Setting speech pitch to: $speechPitch")
         tts?.setPitch(speechPitch)
 
-        // 4. Try to set voice if available
         try {
             setPreferredVoice()
         } catch (e: Exception) {
             Log.e("KUFAY_TTS", "Error setting voice: ${e.message}")
         }
 
-        // Log current TTS settings for debugging
         Log.d(
             "KUFAY_TTS", "Current TTS settings - Language: ${tts?.voice?.locale}, " +
                     "Speech Rate: $speechRate, Speech Pitch: $speechPitch"
         )
     }
 
-    /**
-     * Refreshes TTS settings from preferences
-     * Called when settings are changed to apply them immediately
-     */
     fun refreshTtsSettings() {
         serviceScope.launch {
-            // Get current settings from DataStore
             val language = userPreferences.ttsLanguage.first()
             val rate = userPreferences.ttsSpeechRate.first()
             val pitch = userPreferences.ttsSpeechPitch.first()
 
-            // Apply all settings
             withContext(Dispatchers.Main) {
                 setLanguage(language)
                 tts?.setSpeechRate(rate)
@@ -223,7 +187,6 @@ class TTSService @Inject constructor(
         }
     }
 
-    // Update setPreferredVoice to be simpler and more reliable
     private fun setPreferredVoice() {
         val preferredGender = prefs.getString("tts_voice_gender", "female")
         Log.d("KUFAY_TTS", "Setting preferred voice gender: $preferredGender")
@@ -234,17 +197,14 @@ class TTSService @Inject constructor(
             return
         }
 
-        // Current language
         val currentLocale = tts?.voice?.locale ?: Locale.FRENCH
 
-        // First filter by language
         val languageVoices = voices.filter { it.locale.language == currentLocale.language }
         if (languageVoices.isEmpty()) {
             Log.w("KUFAY_TTS", "No voices for language: ${currentLocale.language}")
             return
         }
 
-        // Then try to find a voice with preferred gender
         val genderedVoices = languageVoices.filter { voice ->
             when (preferredGender) {
                 "male" -> !voice.name.contains("female", ignoreCase = true)
@@ -252,7 +212,6 @@ class TTSService @Inject constructor(
             }
         }
 
-        // Use gendered voice if available, otherwise use any voice in the right language
         val selectedVoice =
             if (genderedVoices.isNotEmpty()) genderedVoices.first() else languageVoices.first()
         Log.d(
@@ -263,7 +222,6 @@ class TTSService @Inject constructor(
         tts?.voice = selectedVoice
     }
 
-    // Add a test method that explicitly applies settings before testing
     fun testCurrentSettings() {
         serviceScope.launch {
             val language = userPreferences.ttsLanguage.first()
@@ -282,12 +240,10 @@ class TTSService @Inject constructor(
             }
 
             withContext(Dispatchers.Main) {
-                // Ensure settings are applied before speaking
                 setLanguage(language)
                 tts?.setSpeechRate(rate)
                 tts?.setPitch(pitch)
 
-                // Speak test text
                 tts?.speak(
                     testText, TextToSpeech.QUEUE_FLUSH, null,
                     "tts_test_${System.currentTimeMillis()}"
@@ -296,24 +252,19 @@ class TTSService @Inject constructor(
         }
     }
 
-    // Vérifier si on devrait parler cette notification
     private fun shouldSpeakNotification(notificationId: Long): Boolean {
         val currentTime = System.currentTimeMillis()
         val lastSpokenTime = recentlySpokenNotifications[notificationId]
 
-        // Si jamais parlé, OK
         if (lastSpokenTime == null) return true
 
-        // Si parlé il y a moins de SPEECH_COOLDOWN_MS, NON
         return (currentTime - lastSpokenTime) >= SPEECH_COOLDOWN_MS
     }
 
-    // Marquer une notification comme parlée
     private fun markAsSpoken(notificationId: Long) {
         val currentTime = System.currentTimeMillis()
         recentlySpokenNotifications[notificationId] = currentTime
 
-        // Nettoyer le cache si trop grand
         if (recentlySpokenNotifications.size > MAX_CACHE_SIZE) {
             val sortedEntries = recentlySpokenNotifications.entries
                 .sortedByDescending { it.value }
@@ -326,13 +277,11 @@ class TTSService @Inject constructor(
     }
 
     fun speakNotification(notification: Notification, isRecognizedPattern: Boolean = true) {
-        // NOUVEAU: Vérifier si on a déjà lu cette notification récemment
         if (!shouldSpeakNotification(notification.id)) {
             Log.d("KUFAY_TTS", "Skipping duplicate notification ${notification.id}")
             return
         }
 
-        // Check if we should use Wolof recordings
         val useWolofRecordings = runBlocking {
             userPreferences.useWolofRecordings.first()
         }
@@ -344,7 +293,6 @@ class TTSService @Inject constructor(
         )
         Log.d("KUFAY_TTS", "TTS Language: $ttsLanguage, Use Wolof: $useWolofRecordings")
 
-        // For Mixx by Yas, only auto-read notifications with "recu"
         if (notification.packageName == "com.google.android.apps.messaging" &&
             notification.title.contains("Mixx by Yas", ignoreCase = true) &&
             !notification.text.contains("recu", ignoreCase = true) &&
@@ -354,7 +302,6 @@ class TTSService @Inject constructor(
             return
         }
 
-        // For Orange Money, only auto-read notifications with "Vous avez recu"
         if (notification.packageName == "com.google.android.apps.messaging" &&
             notification.title.contains("OrangeMoney", ignoreCase = true) &&
             !notification.text.contains("Vous avez recu", ignoreCase = true) &&
@@ -364,10 +311,8 @@ class TTSService @Inject constructor(
             return
         }
 
-        // NOUVEAU: Marquer comme parlé AVANT de commencer
         markAsSpoken(notification.id)
 
-        // Determine if we should use Wolof recordings
         if (ttsLanguage == "wo" && useWolofRecordings && isRecognizedPattern) {
             playWolofNotification(notification)
         } else if (isRecognizedPattern) {
@@ -378,11 +323,7 @@ class TTSService @Inject constructor(
         }
     }
 
-    // Method to manually speak a notification (for user-initiated playback)
-    // Method to manually speak a notification (for user-initiated playback)
     fun manuallySpeak(notification: Notification) {
-        // Pour les lectures manuelles, on autorise même si récemment parlé
-        // Mais on met à jour le cache pour éviter les auto-reads immédiatement après
         markAsSpoken(notification.id)
 
         val useWolofRecordings = runBlocking {
@@ -403,20 +344,140 @@ class TTSService @Inject constructor(
         }
     }
 
-    // Method to play Wolof recordings for different notification types
     private fun playWolofNotification(notification: Notification) {
         when {
-            // WAVE BUSINESS NOTIFICATIONS
+            // ===== WAVE PERSONAL - TRANSFER RECEIVED =====
+            notification.packageName == "com.wave.personal" &&
+                    (notification.title.contains("Transfert reçu", ignoreCase = true) ||
+                            notification.title.contains("Transfer received", ignoreCase = true)) -> {
+
+                val receivedEnRegex = """You received\s+(\d+(?:,\d+)?(?:\.\d+)?)\s*F""".toRegex(RegexOption.IGNORE_CASE)
+                var amount = receivedEnRegex.find(notification.text)?.groupValues?.getOrNull(1)
+                    ?.replace(",", "")?.replace("F", "")
+
+                var sender: String? = null
+                if (amount != null) {
+                    val senderEnRegex = """From\s+([^(]+)(?:\s*\()?""".toRegex(RegexOption.IGNORE_CASE)
+                    sender = senderEnRegex.find(notification.text)?.groupValues?.getOrNull(1)?.trim()
+                }
+
+                if (amount == null) {
+                    val receivedRegex = """(?:Vous avez reçu|reçu)\s+(\d+(?:\.\d+)?F)""".toRegex()
+                    amount = receivedRegex.find(notification.text)?.groupValues?.getOrNull(1)
+                        ?.replace("F", "")?.replace(".", "")
+                }
+
+                if (sender == null) {
+                    val senderRegex = """Vous avez reçu\s+\d+(?:\.\d+)?F\s+[dD]e\s+([^\.]+)""".toRegex(RegexOption.IGNORE_CASE)
+                    sender = senderRegex.find(notification.text)?.groupValues?.getOrNull(1)?.trim()
+                }
+
+                if (sender == null) {
+                    val generalSenderRegex = """[dD]e\s+([^\.]+)""".toRegex(RegexOption.IGNORE_CASE)
+                    sender = generalSenderRegex.find(notification.text)?.groupValues?.getOrNull(1)?.trim()
+                }
+
+                if (amount == null) {
+                    amount = notification.amount?.toLong()?.toString() ?: ""
+                }
+
+                sender = sender ?: ""
+
+                if (sender.contains("*") || sender.contains("(")) {
+                    sender = formatUsername(sender)
+                } else if (sender.matches("""^\d+.*""".toRegex())) {
+                    val parts = sender.split(" ", limit = 2)
+                    val numberPart = parts[0]
+                    val namePart = if (parts.size > 1) " " + parts[1] else ""
+
+                    if (numberPart.length >= 4 && numberPart.all { it.isDigit() }) {
+                        val first2 = numberPart.take(2)
+                        val last2 = numberPart.takeLast(2)
+                        sender = "$first2 étoile $last2$namePart"
+                    }
+                }
+
+                playWolofRecordingWithText("wave_personal_received", "$amount Francs CFA de $sender")
+            }
+
+            // ===== WAVE PERSONAL - TRANSFER SENT =====
+            notification.packageName == "com.wave.personal" &&
+                    (notification.title.contains("Transfert réussi", ignoreCase = true) ||
+                            notification.title.contains("Transfert envoyé", ignoreCase = true) ||
+                            notification.title.contains("Transfer sent", ignoreCase = true)) -> {
+
+                val text = when {
+                    notification.text.contains("Nouveau solde", ignoreCase = true) ->
+                        notification.text.substring(0, notification.text.indexOf("Nouveau solde", ignoreCase = true)).trim()
+                    notification.text.contains("New balance", ignoreCase = true) ->
+                        notification.text.substring(0, notification.text.indexOf("New balance", ignoreCase = true)).trim()
+                    else -> notification.text
+                }
+
+                val sentEnRegex = """You sent\s+(\d+(?:,\d+)?(?:\.\d+)?)\s*F""".toRegex(RegexOption.IGNORE_CASE)
+                var amount = sentEnRegex.find(text)?.groupValues?.getOrNull(1)
+                    ?.replace(",", "")?.replace("F", "")
+
+                var recipient: String? = null
+                if (amount != null) {
+                    val recipientEnRegex = """To\s+([^(]+)(?:\s*\()?""".toRegex(RegexOption.IGNORE_CASE)
+                    recipient = recipientEnRegex.find(text)?.groupValues?.getOrNull(1)?.trim()
+                }
+
+                if (amount == null) {
+                    val transferRegex = """(?:Vous avez envoyé|envoyé)\s+(\d+(?:\.\d+)?F)""".toRegex()
+                    amount = transferRegex.find(text)?.groupValues?.getOrNull(1)
+                        ?.replace("F", "")?.replace(".", "")
+                }
+
+                if (recipient == null) {
+                    val recipientRegex = """A\s+([^0-9\s\(\)\.;:]+(?:\s+[^0-9\s\(\)\.;:]+)*)""".toRegex()
+                    recipient = recipientRegex.find(text)?.groupValues?.getOrNull(1)?.trim()
+                }
+
+                if (amount == null) {
+                    amount = notification.amount?.toLong()?.toString() ?: ""
+                }
+
+                recipient = recipient ?: ""
+
+                playWolofRecordingWithText(
+                    "wave_personal_sent",
+                    "$amount Francs CFA ${if (recipient.isNotEmpty()) recipient else ""}"
+                )
+            }
+
+            // ===== WAVE PERSONAL - PAYMENT MADE =====
+            notification.packageName == "com.wave.personal" &&
+                    (notification.title.contains("Paiement réussi", ignoreCase = true) ||
+                            notification.title.contains("Payment successful", ignoreCase = true)) -> {
+
+                val paymentEnRegex = """You have paid\s+(\d+(?:,\d+)?(?:\.\d+)?)\s*F""".toRegex(RegexOption.IGNORE_CASE)
+                var amount = paymentEnRegex.find(notification.text)?.groupValues?.getOrNull(1)
+                    ?.replace(",", "")?.replace("F", "")
+
+                if (amount == null) {
+                    val paymentRegex = """(?:Vous avez payé|payé)\s+(\d+(?:\.\d+)?F)""".toRegex()
+                    amount = paymentRegex.find(notification.text)?.groupValues?.getOrNull(1)
+                        ?.replace("F", "")?.replace(".", "")
+                }
+
+                if (amount == null) {
+                    amount = notification.amount?.toLong()?.toString() ?: ""
+                }
+
+                playWolofRecordingWithText("wave_personal_payment", "$amount Francs CFA")
+            }
+
+            // ===== WAVE BUSINESS NOTIFICATIONS =====
             notification.packageName == "com.wave.business" &&
                     notification.title.contains("Paiement réussi", ignoreCase = true) -> {
-                // Extract amount
                 val paymentRegex =
                     """a payé\s+(\d+(?:[.,]\d+)?(?:F|))""".toRegex(RegexOption.IGNORE_CASE)
                 val amount = paymentRegex.find(notification.text)?.groupValues?.getOrNull(1)
                     ?.replace("F", "")?.replace(".", "")?.replace(",", "")
                     ?: notification.amount?.toLong()?.toString() ?: ""
 
-                // Extract username
                 val usernameRegex = """DISTANCE reçu:\s*([^(]*)(?:\(|a)""".toRegex()
                 var username =
                     usernameRegex.find(notification.text)?.groupValues?.getOrNull(1)?.trim() ?: ""
@@ -425,10 +486,9 @@ class TTSService @Inject constructor(
                     username = formatUsername(username)
                 }
 
-                playWolofRecordingWithText("wave_business_payment", "$amount Franc C F A de $username")
+                playWolofRecordingWithText("wave_business_payment", "$amount Francs CFA de $username")
             }
 
-            // WAVE BUSINESS - Zéro frais (encaissement)
             notification.packageName == "com.wave.business" &&
                     notification.title.contains("Zéro frais", ignoreCase = true) -> {
                 val encaissementRegex =
@@ -448,11 +508,10 @@ class TTSService @Inject constructor(
 
                 playWolofRecordingWithText(
                     "wave_business_encaissement",
-                    "$amount Franc C F A de $username"
+                    "$amount Francs CFA de $username"
                 )
             }
 
-            // WAVE BUSINESS - À DISTANCE reçu
             notification.packageName == "com.wave.business" &&
                     (notification.text.contains("À DISTANCE reçu", ignoreCase = true) ||
                             notification.text.contains("A DISTANCE reçu", ignoreCase = true)) -> {
@@ -473,11 +532,10 @@ class TTSService @Inject constructor(
 
                 playWolofRecordingWithText(
                     "wave_business_distance",
-                    "$amount Franc C F A de $username"
+                    "$amount Francs CFA de $username"
                 )
             }
 
-            // ORANGE MONEY - TRANSFERT ENVOYÉ
             notification.packageName == "com.google.android.apps.messaging" &&
                     notification.title.contains("OrangeMoney", ignoreCase = true) &&
                     notification.text.contains("Votre transfert", ignoreCase = true) -> {
@@ -507,10 +565,9 @@ class TTSService @Inject constructor(
                     }
                 } else ""
 
-                playWolofRecordingWithText("orange_money_sent", "$amount Franc C F A vers $recipient")
+                playWolofRecordingWithText("orange_money_sent", "$amount Francs CFA vers $recipient")
             }
 
-            // ORANGE MONEY - PAIEMENT EFFECTUÉ
             notification.packageName == "com.google.android.apps.messaging" &&
                     notification.title.contains("OrangeMoney", ignoreCase = true) &&
                     notification.text.contains("Votre operation", ignoreCase = true) -> {
@@ -525,10 +582,9 @@ class TTSService @Inject constructor(
                 val amount = amountRegex.find(cleanedText)?.groupValues?.get(1)
                     ?: notification.amount?.toLong()?.toString() ?: ""
 
-                playWolofRecordingWithText("orange_money_payment", "$amount Franc C F A")
+                playWolofRecordingWithText("orange_money_payment", "$amount Francs CFA")
             }
 
-            // ORANGE MONEY - TRANSFERT REÇU
             notification.packageName == "com.google.android.apps.messaging" &&
                     notification.title.contains("OrangeMoney", ignoreCase = true) &&
                     (notification.text.contains("Vous avez recu", ignoreCase = true) ||
@@ -565,10 +621,9 @@ class TTSService @Inject constructor(
                     }
                 }
 
-                playWolofRecordingWithText("orange_money_received", "$amount Franc C F A de $username")
+                playWolofRecordingWithText("orange_money_received", "$amount Francs CFA de $username")
             }
 
-            // ORANGE MONEY - GENERAL (Fallback)
             notification.packageName == "com.google.android.apps.messaging" &&
                     notification.title.contains("OrangeMoney", ignoreCase = true) -> {
 
@@ -584,16 +639,14 @@ class TTSService @Inject constructor(
                 val amount = amountRegex.find(textToRead)?.groupValues?.get(1)
                     ?: notification.amount?.toLong()?.toString() ?: ""
 
-                playWolofRecordingWithText("orange_money_general", "$amount , Franc C F A")
+                playWolofRecordingWithText("orange_money_general", "$amount , Francs CFA")
             }
 
-            // MIXX BY YAS - Received
             notification.packageName == "com.google.android.apps.messaging" &&
                     notification.title.contains("Mixx by Yas", ignoreCase = true) &&
                     (notification.text.contains("recu", ignoreCase = true) ||
                             notification.text.contains("reçu", ignoreCase = true)) -> {
 
-                // Clean text
                 val cleanedText =
                     if (notification.text.contains("Votre nouveau solde", ignoreCase = true)) {
                         notification.text.split("Votre nouveau solde", ignoreCase = true)[0].trim()
@@ -618,15 +671,13 @@ class TTSService @Inject constructor(
                     ""
                 }
 
-                playWolofRecordingWithText("mixx_received", "$amount Franc C F A de $formattedSender")
+                playWolofRecordingWithText("mixx_received", "$amount Francs CFA de $formattedSender")
             }
 
-            // MIXX BY YAS - Sent
             notification.packageName == "com.google.android.apps.messaging" &&
                     notification.title.contains("Mixx by Yas", ignoreCase = true) &&
                     (notification.text.contains("envoy", ignoreCase = true)) -> {
 
-                // Clean text
                 val cleanedText =
                     if (notification.text.contains("Votre nouveau solde", ignoreCase = true)) {
                         notification.text.split("Votre nouveau solde", ignoreCase = true)[0].trim()
@@ -651,94 +702,9 @@ class TTSService @Inject constructor(
                     ""
                 }
 
-                playWolofRecordingWithText("mixx_sent", "$amount Franc C F A de $formattedRecipient")
+                playWolofRecordingWithText("mixx_sent", "$amount Francs CFA de $formattedRecipient")
             }
 
-            // WAVE PERSONAL - Payment made
-            notification.packageName == "com.wave.personal" &&
-                    notification.title.contains("Paiement réussi", ignoreCase = true) -> {
-
-                val paymentRegex = """(?:Vous avez payé|payé)\s+(\d+(?:\.\d+)?F)""".toRegex()
-                val amount = paymentRegex.find(notification.text)?.groupValues?.getOrNull(1)
-                    ?.replace("F", "")?.replace(".", "") ?: notification.amount?.toLong()
-                    ?.toString() ?: ""
-
-                playWolofRecordingWithText("wave_personal_payment", "$amount Franc C F A ")
-            }
-
-            // WAVE PERSONAL - Transfer sent
-            notification.packageName == "com.wave.personal" &&
-                    (notification.title.contains("Transfert réussi", ignoreCase = true) ||
-                            notification.title.contains("Transfert envoyé", ignoreCase = true)) -> {
-
-                // Get text before "Nouveau solde" if present
-                val text = if (notification.text.contains("Nouveau solde", ignoreCase = true)) {
-                    notification.text.substring(
-                        0,
-                        notification.text.indexOf("Nouveau solde", ignoreCase = true)
-                    ).trim()
-                } else {
-                    notification.text
-                }
-
-                val transferRegex = """(?:Vous avez envoyé|envoyé)\s+(\d+(?:\.\d+)?F)""".toRegex()
-                val amount = transferRegex.find(text)?.groupValues?.getOrNull(1)
-                    ?.replace("F", "")?.replace(".", "") ?: notification.amount?.toLong()
-                    ?.toString() ?: ""
-
-                // Extract recipient name using a pattern that won't match timestamps
-                val recipientRegex =
-                    """A\s+([^0-9\s\(\)\.;:]+(?:\s+[^0-9\s\(\)\.;:]+)*)""".toRegex()
-                val recipient = recipientRegex.find(text)?.groupValues?.getOrNull(1)?.trim() ?: ""
-
-                playWolofRecordingWithText(
-                    "wave_personal_sent",
-                    "$amount Franc C F A  ${if (recipient.isNotEmpty()) recipient else ""}"
-                )
-            }
-
-            // WAVE PERSONAL - Transfer received
-            notification.packageName == "com.wave.personal" &&
-                    notification.title.contains("Transfert reçu", ignoreCase = true) -> {
-
-                val receivedRegex = """(?:Vous avez reçu|reçu)\s+(\d+(?:\.\d+)?F)""".toRegex()
-                val amount = receivedRegex.find(notification.text)?.groupValues?.getOrNull(1)
-                    ?.replace("F", "")?.replace(".", "") ?: notification.amount?.toLong()
-                    ?.toString() ?: ""
-
-                // Extract sender name
-                val senderRegex =
-                    """Vous avez reçu\s+\d+(?:\.\d+)?F\s+[dD]e\s+([^\.]+)""".toRegex(RegexOption.IGNORE_CASE)
-                var sender =
-                    senderRegex.find(notification.text)?.groupValues?.getOrNull(1)?.trim() ?: ""
-
-                // If no sender found with specific pattern, try general "de" pattern
-                if (sender.isEmpty()) {
-                    val generalSenderRegex = """[dD]e\s+([^\.]+)""".toRegex(RegexOption.IGNORE_CASE)
-                    sender = generalSenderRegex.find(notification.text)?.groupValues?.getOrNull(1)
-                        ?.trim() ?: ""
-                }
-
-                // Format sender name if needed
-                if (sender.contains("*") || sender.contains("(")) {
-                    sender = formatUsername(sender)
-                } else if (sender.matches("""^\d+.*""".toRegex())) {
-                    // Handle numeric sender names
-                    val parts = sender.split(" ", limit = 2)
-                    val numberPart = parts[0]
-                    val namePart = if (parts.size > 1) " " + parts[1] else ""
-
-                    if (numberPart.length >= 4 && numberPart.all { it.isDigit() }) {
-                        val first2 = numberPart.take(2)
-                        val last2 = numberPart.takeLast(2)
-                        sender = "$first2 étoile $last2$namePart"
-                    }
-                }
-
-                playWolofRecordingWithText("wave_personal_received", "$amount Franc C F A de $sender")
-            }
-
-            // Fallback to regular TTS for unhandled cases
             else -> {
                 val textToSpeak = prepareTextToSpeak(notification)
                 tts?.speak(
@@ -751,33 +717,25 @@ class TTSService @Inject constructor(
         }
     }
 
-    // Helper method to play Wolof recording followed by dynamic text with TTS
-    // Dans TTSService.kt
     private fun playWolofRecordingWithText(recordingKey: String, dynamicText: String) {
         try {
-            // Get the recording resource ID
             val resourceId = WOLOF_RECORDINGS[recordingKey]
             if (resourceId == null) {
                 Log.e("KUFAY_TTS", "Wolof recording not found for key: $recordingKey")
-                // Fall back to TTS
                 tts?.speak(dynamicText, TextToSpeech.QUEUE_ADD, null, "dynamic_fallback")
                 return
             }
 
             Log.d("KUFAY_TTS", "Playing Wolof recording with ID: $resourceId")
 
-            // Create MediaPlayer and prepare the audio resource
             try {
                 val mediaPlayer = MediaPlayer.create(context, resourceId)
                 if (mediaPlayer != null) {
-                    // Set completion listener to speak dynamic text after recording
                     mediaPlayer.setOnCompletionListener {
                         it.release()
-                        // Speak the dynamic part using regular TTS (French or English)
                         tts?.speak(dynamicText, TextToSpeech.QUEUE_ADD, null, "dynamic_${System.currentTimeMillis()}")
                     }
 
-                    // Start playback
                     mediaPlayer.start()
                 } else {
                     Log.e("KUFAY_TTS", "Failed to create MediaPlayer for resource: $resourceId")
@@ -785,12 +743,10 @@ class TTSService @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.e("KUFAY_TTS", "Error playing Wolof recording: ${e.message}")
-                // Fall back to regular TTS on error
                 tts?.speak(dynamicText, TextToSpeech.QUEUE_ADD, null, "dynamic_error_fallback")
             }
         } catch (e: Exception) {
             Log.e("KUFAY_TTS", "Exception in playWolofRecordingWithText: ${e.message}")
-            // Fall back to regular TTS on any exception
             tts?.speak(dynamicText, TextToSpeech.QUEUE_ADD, null, "exception_fallback")
         }
     }
@@ -799,124 +755,98 @@ class TTSService @Inject constructor(
         tts?.stop()
     }
 
-    // Existing method
     private fun prepareTextToSpeak(notification: Notification): String {
-        // Original implementation remains the same
-        // Use "Wave" instead of "Wave Personal"
         val appName = if (notification.packageName == "com.wave.personal") {
             "Wave"
         } else {
             notification.appName
         }
 
-        // WAVE BUSINESS NOTIFICATIONS
         if (notification.packageName == "com.wave.business") {
-            // Existing implementation for Wave Business notifications
             val title = notification.title
             val text = notification.text
 
-            // 1. "Paiement réussi!" - format: "Wave Business Paiement reçu [amount] de [username]!"
             if (title.contains("Paiement réussi", ignoreCase = true)) {
-                // Extract amount
                 val paymentRegex =
                     """a payé\s+(\d+(?:[.,]\d+)?(?:F|))""".toRegex(RegexOption.IGNORE_CASE)
                 val amount = paymentRegex.find(text)?.groupValues?.getOrNull(1)
                     ?.replace("F", "")?.replace(".", "")?.replace(",", "") ?: ""
 
-                // Extract username: between "DISTANCE reçu:" and "a payé"
                 val usernameRegex = """DISTANCE reçu:\s*([^(]*)(?:\(|a)""".toRegex()
                 var username = usernameRegex.find(text)?.groupValues?.getOrNull(1)?.trim() ?: ""
 
-                // If username contains stars, format properly
                 if (username.contains("*")) {
                     username = formatUsername(username)
                 }
 
-                return "Wave Business: Paiement reçu $amount Franc C F A de $username!"
+                return "Wave Business: Paiement reçu $amount Francs CFA de $username!"
             }
 
-            // 2. "Zéro frais!" - format: "Wave Business Paiement encaissé [amount] de [username]!"
             else if (title.contains("Zéro frais", ignoreCase = true)) {
-                // Extract amount
                 val encaissementRegex =
                     """sur votre encaissement de\s+(\d+(?:[.,]\d+)?)""".toRegex(RegexOption.IGNORE_CASE)
                 val amount = encaissementRegex.find(text)?.groupValues?.getOrNull(1)
                     ?.replace(".", "")?.replace(",", "") ?: ""
 
-                // Extract username: between "de" and "le [date]"
                 val usernameRegex =
                     """[dD]e\s+([^(]*)(?:\(|\s+le)""".toRegex(RegexOption.IGNORE_CASE)
                 var username = usernameRegex.find(text)?.groupValues?.getOrNull(1)?.trim() ?: ""
 
-                // If username contains stars, format properly
                 if (username.contains("*")) {
                     username = formatUsername(username)
                 }
 
-                return "Wave Business: Paiement encaissé $amount Franc C F A de $username!"
+                return "Wave Business: Paiement encaissé $amount Francs CFA de $username!"
             }
 
-            // 3. "À DISTANCE reçu" - format similar to "Paiement réussi"
             else if (text.contains("À DISTANCE reçu", ignoreCase = true) ||
                 text.contains("A DISTANCE reçu", ignoreCase = true)
             ) {
 
-                // Extract amount
                 val paymentRegex =
                     """a payé\s+(\d+(?:[.,]\d+)?(?:F|))""".toRegex(RegexOption.IGNORE_CASE)
                 val amount = paymentRegex.find(text)?.groupValues?.getOrNull(1)
                     ?.replace("F", "")?.replace(".", "")?.replace(",", "") ?: ""
 
-                // Extract username: between "DISTANCE reçu:" and "a payé"
                 val usernameRegex = """DISTANCE reçu:\s*([^(]*)(?:\(|a)""".toRegex()
                 var username = usernameRegex.find(text)?.groupValues?.getOrNull(1)?.trim() ?: ""
 
-                // If username contains stars, format properly
                 if (username.contains("*")) {
                     username = formatUsername(username)
                 }
 
-                return "Wave Business: Paiement reçu à distance $amount Franc C F A de $username!"
+                return "Wave Business: Paiement reçu à distance $amount Francs CFA de $username!"
             }
 
-            // Standard Wave Business notification
             else {
-                // Extract amount
                 val amount = notification.amount?.toLong()?.toString() ?: ""
-                return "$appName: $title. $amount , Franc C F A"
+                return "$appName: $title. $amount , Francs CFA"
             }
         }
 
-        // Rest of the original implementation for other notification types
-        // ORANGE MONEY NOTIFICATIONS with "Vous avez recu"
         else if (notification.packageName == "com.google.android.apps.messaging" &&
             notification.title.contains("OrangeMoney", ignoreCase = true) &&
             (notification.text.contains("recu", ignoreCase = true) ||
                     notification.text.contains("reçu", ignoreCase = true))
         ) {
 
-// Clean text - remove anything after "Votre solde" if present
             val cleanedText = if (notification.text.contains("Votre solde", ignoreCase = true)) {
                 notification.text.split("Votre solde", ignoreCase = true)[0].trim()
             } else {
                 notification.text
             }
 
-            // Extract amount - ONLY INTEGER PART
             val amountRegex =
                 """recu un transfert de (\d+)(?:\.\d+)?(?:FCFA|F)""".toRegex(RegexOption.IGNORE_CASE)
             val amountMatch = amountRegex.find(cleanedText)
             var amount = amountMatch?.groupValues?.get(1)?.trim() ?: ""
 
-            // If amount is empty from the regex, try to get it from the notification object
             if (amount.isEmpty() && notification.amount != null) {
                 amount = notification.amount.toLong().toString()
             }
 
-            // Make sure we have an amount to read
             Log.d("KUFAY_TTS", "Extracted Orange Money amount: $amount (integer part only)")
 
-            // Extract username - get the part after "de" and before a period or "Ref"
             val usernameRegex =
                 """(?:FCFA|F) [dD]e ([^\.]*?)(?:Ref|\.)""".toRegex(RegexOption.IGNORE_CASE)
             val usernameMatch = usernameRegex.find(cleanedText)
@@ -924,14 +854,11 @@ class TTSService @Inject constructor(
 
             Log.d("KUFAY_TTS", "Extracted Orange Money username: $username")
 
-            // Special handling for numeric usernames (like "781624779 Fofana")
             if (username.isNotEmpty()) {
-                // Split into number part and name part (if exists)
                 val parts = username.split(" ", limit = 2)
                 val numberPart = parts[0]
                 val namePart = if (parts.size > 1) parts[1] else ""
 
-                // Format number part as requested (first 2 digits + "étoile" + last 2 digits)
                 if (numberPart.length >= 4 && numberPart.all { it.isDigit() }) {
                     val first2 = numberPart.take(2)
                     val last2 = numberPart.takeLast(2)
@@ -944,14 +871,12 @@ class TTSService @Inject constructor(
                 }
             }
 
-            return "Orange Money: vous avez reçu $amount Franc C F A de $username!"
+            return "Orange Money: vous avez reçu $amount Francs CFA de $username!"
         }
 
-        // OTHER ORANGE MONEY NOTIFICATIONS
         else if (notification.packageName == "com.google.android.apps.messaging" &&
             notification.title.contains("OrangeMoney", ignoreCase = true)
         ) {
-            // Get just the part of text before "Solde:" or "Votre solde" if it exists
             val textToRead = if (notification.text.contains("Votre solde", ignoreCase = true)) {
                 notification.text.split("Votre solde", ignoreCase = true)[0].trim()
             } else if (notification.text.contains("Solde:", ignoreCase = true)) {
@@ -961,23 +886,18 @@ class TTSService @Inject constructor(
             }
             var formattedText = textToRead
 
-            // Improved regex for amount formatting in Orange Money notifications
-            // This regex will look for numbers followed by ".00" pattern
             val amountPattern = """(\d+(?:,\d+)*)\.00(?:F|FCFA|Fcfa)?""".toRegex(RegexOption.IGNORE_CASE)
 
-            // Format the text by replacing amounts with properly spaced versions
             amountPattern.findAll(textToRead).forEach { matchResult ->
                 val originalAmount = matchResult.value
                 val numericPart = matchResult.groupValues[1].replace(",", "")
 
-                // Replace the original amount format with TTS-friendly format
                 formattedText = formattedText.replace(
                     originalAmount,
                     "$numericPart, "
                 )
             }
 
-            // Format any phone numbers in the text
             val phonePattern = """(\d{9,})""".toRegex()
             phonePattern.findAll(formattedText).forEach { match ->
                 val phoneNumber = match.value
@@ -989,18 +909,15 @@ class TTSService @Inject constructor(
                 }
             }
 
-            // Return the formatted text
             return "Orange Money: $formattedText"
         }
 
-        // MIXX BY YAS NOTIFICATIONS with "reçu"
         else if (notification.packageName == "com.google.android.apps.messaging" &&
             notification.title.contains("Mixx by Yas", ignoreCase = true) &&
             (notification.text.contains("recu", ignoreCase = true) ||
                     notification.text.contains("reçu", ignoreCase = true))
         ) {
 
-            // Clean text - remove anything after "Votre nouveau solde" if present
             val cleanedText =
                 if (notification.text.contains("Votre nouveau solde", ignoreCase = true)) {
                     notification.text.split("Votre nouveau solde", ignoreCase = true)[0].trim()
@@ -1012,7 +929,6 @@ class TTSService @Inject constructor(
                     notification.text.trim()
                 }
 
-            // Extract amount
             val amountRegex =
                 """(\d+(?:[.,]\d+)?)(?:\s*(?:FCFA|F))""".toRegex(RegexOption.IGNORE_CASE)
             val amountMatch = amountRegex.find(cleanedText)
@@ -1025,7 +941,6 @@ class TTSService @Inject constructor(
                 ""
             }
 
-            // Extract sender for received money
             val senderRegex = """[Dd]e ([^\.]+)""".toRegex()
             val sender = senderRegex.find(cleanedText)?.groupValues?.get(1)?.trim() ?: ""
 
@@ -1036,19 +951,17 @@ class TTSService @Inject constructor(
             }
 
             return if (formattedSender.isNotEmpty()) {
-                "Mixx by Yasse: Vous avez reçu $amount , Franc C F A de $formattedSender"
+                "Mixx by Yasse: Vous avez reçu $amount , Francs CFA de $formattedSender"
             } else {
-                "Mixx by Yasse: Vous avez reçu $amount , Franc C F A"
+                "Mixx by Yasse: Vous avez reçu $amount , Francs CFA"
             }
         }
 
-        // OTHER MIXX BY YAS NOTIFICATIONS with "envoyé" (these won't be auto-read)
         else if (notification.packageName == "com.google.android.apps.messaging" &&
             notification.title.contains("Mixx by Yas", ignoreCase = true) &&
             (notification.text.contains("envoy", ignoreCase = true))
         ) {
 
-            // Clean text - remove anything after "Votre nouveau solde" if present
             val cleanedText =
                 if (notification.text.contains("Votre nouveau solde", ignoreCase = true)) {
                     notification.text.split("Votre nouveau solde", ignoreCase = true)[0].trim()
@@ -1060,7 +973,6 @@ class TTSService @Inject constructor(
                     notification.text.trim()
                 }
 
-            // Extract amount
             val amountRegex =
                 """(\d+(?:[.,]\d+)?)(?:\s*(?:FCFA|F))""".toRegex(RegexOption.IGNORE_CASE)
             val amountMatch = amountRegex.find(cleanedText)
@@ -1073,7 +985,6 @@ class TTSService @Inject constructor(
                 ""
             }
 
-            // Extract recipient
             val recipientRegex = """[àÀaA] ([^\.]+)""".toRegex()
             val recipient = recipientRegex.find(cleanedText)?.groupValues?.get(1)?.trim() ?: ""
 
@@ -1084,76 +995,98 @@ class TTSService @Inject constructor(
             }
 
             return if (formattedRecipient.isNotEmpty()) {
-                "Mixx by Yass: Vous avez envoyé $amount , Franc C F A à $formattedRecipient"
+                "Mixx by Yass: Vous avez envoyé $amount , Francs CFA à $formattedRecipient"
             } else {
-                "Mixx by Yass: Vous avez envoyé $amount , Franc C F A"
+                "Mixx by Yass: Vous avez envoyé $amount , Francs CFA"
             }
         }
 
-        // WAVE PERSONAL NOTIFICATIONS
         else if (notification.packageName == "com.wave.personal") {
             val title = notification.title
             var text = notification.text
 
-            // For "Transfert réussi", remove part after "Nouveau solde"
-            if (title.contains("Transfert réussi", ignoreCase = true) ||
-                title.contains("Transfert envoyé", ignoreCase = true) ||
-                title.contains("Transfert reçu!", ignoreCase = true)
-            ) {
-                val soldeIndex = text.indexOf("Nouveau solde", ignoreCase = true)
-                if (soldeIndex > 0) {
-                    // Cut off everything after "Nouveau solde"
-                    text = text.substring(0, soldeIndex).trim()
-                    Log.d("KUFAY_TTS", "Cleaned Wave Transfert text: $text")
-                }
+            val isTransferReceived = title.contains("Transfert reçu", ignoreCase = true) ||
+                    title.contains("Transfer received", ignoreCase = true)
+            val isTransferSent = title.contains("Transfert réussi", ignoreCase = true) ||
+                    title.contains("Transfert envoyé", ignoreCase = true) ||
+                    title.contains("Transfer sent", ignoreCase = true)
+            val isPayment = title.contains("Paiement réussi", ignoreCase = true) ||
+                    title.contains("Payment successful", ignoreCase = true)
 
+            if (isTransferSent || isTransferReceived) {
+                val soldeIndex = when {
+                    text.contains("Nouveau solde", ignoreCase = true) ->
+                        text.indexOf("Nouveau solde", ignoreCase = true)
+                    text.contains("New balance", ignoreCase = true) ->
+                        text.indexOf("New balance", ignoreCase = true)
+                    else -> -1
+                }
+                if (soldeIndex > 0) {
+                    text = text.substring(0, soldeIndex).trim()
+                    Log.d("KUFAY_TTS", "Cleaned Wave text: $text")
+                }
             }
 
             val extractedAmount = when {
-                title.contains("Paiement réussi", ignoreCase = true) -> {
-                    val paymentRegex = """(?:Vous avez payé|payé)\s+(\d+(?:\.\d+)?F)""".toRegex()
-                    paymentRegex.find(text)?.groupValues?.getOrNull(1)
-                        ?.replace("F", "")?.replace(".", "") ?: ""
+                isPayment -> {
+                    val paymentEnRegex = """You have paid\s+(\d+(?:,\d+)?(?:\.\d+)?)\s*F""".toRegex(RegexOption.IGNORE_CASE)
+                    val enMatch = paymentEnRegex.find(text)?.groupValues?.getOrNull(1)
+                        ?.replace(",", "")?.replace("F", "")
+
+                    enMatch ?: run {
+                        val paymentRegex = """(?:Vous avez payé|payé)\s+(\d+(?:\.\d+)?F)""".toRegex()
+                        paymentRegex.find(text)?.groupValues?.getOrNull(1)
+                            ?.replace("F", "")?.replace(".", "") ?: ""
+                    }
                 }
 
-                title.contains("Transfert réussi", ignoreCase = true) ||
-                        title.contains("Transfert envoyé", ignoreCase = true) -> {
-                    val transferRegex =
-                        """(?:Vous avez envoyé|envoyé)\s+(\d+(?:\.\d+)?F)""".toRegex()
-                    transferRegex.find(text)?.groupValues?.getOrNull(1)
-                        ?.replace("F", "")?.replace(".", "") ?: ""
+                isTransferSent -> {
+                    val sentEnRegex = """You sent\s+(\d+(?:,\d+)?(?:\.\d+)?)\s*F""".toRegex(RegexOption.IGNORE_CASE)
+                    val enMatch = sentEnRegex.find(text)?.groupValues?.getOrNull(1)
+                        ?.replace(",", "")?.replace("F", "")
+
+                    enMatch ?: run {
+                        val transferRegex = """(?:Vous avez envoyé|envoyé)\s+(\d+(?:\.\d+)?F)""".toRegex()
+                        transferRegex.find(text)?.groupValues?.getOrNull(1)
+                            ?.replace("F", "")?.replace(".", "") ?: ""
+                    }
                 }
 
-                title.contains("Transfert reçu", ignoreCase = true) -> {
-                    val receivedRegex = """(?:Vous avez reçu|reçu)\s+(\d+(?:\.\d+)?F)""".toRegex()
-                    receivedRegex.find(text)?.groupValues?.getOrNull(1)
-                        ?.replace("F", "")?.replace(".", "") ?: ""
+                isTransferReceived -> {
+                    val receivedEnRegex = """You received\s+(\d+(?:,\d+)?(?:\.\d+)?)\s*F""".toRegex(RegexOption.IGNORE_CASE)
+                    val enMatch = receivedEnRegex.find(text)?.groupValues?.getOrNull(1)
+                        ?.replace(",", "")?.replace("F", "")
+
+                    enMatch ?: run {
+                        val receivedRegex = """(?:Vous avez reçu|reçu)\s+(\d+(?:\.\d+)?F)""".toRegex()
+                        receivedRegex.find(text)?.groupValues?.getOrNull(1)
+                            ?.replace("F", "")?.replace(".", "") ?: ""
+                    }
                 }
 
                 else -> notification.amount?.toLong()?.toString() ?: ""
             }
 
             if (extractedAmount.isNotEmpty()) {
-                // For "Transfert reçu", specifically extract sender name
-                if (title.contains("Transfert reçu", ignoreCase = true)) {
-                    // Extract sender using specific patterns
-                    val senderRegex =
-                        """Vous avez reçu\s+\d+(?:\.\d+)?F\s+[dD]e\s+([^\.]+)""".toRegex(RegexOption.IGNORE_CASE)
-                    var sender = senderRegex.find(text)?.groupValues?.getOrNull(1)?.trim() ?: ""
+                if (isTransferReceived) {
+                    val senderEnRegex = """From\s+([^(]+)(?:\s*\()?""".toRegex(RegexOption.IGNORE_CASE)
+                    var sender = senderEnRegex.find(text)?.groupValues?.getOrNull(1)?.trim()
 
-                    // If no sender found with specific pattern, try general "de" pattern
-                    if (sender.isEmpty()) {
-                        val generalSenderRegex =
-                            """[dD]e\s+([^\.]+)""".toRegex(RegexOption.IGNORE_CASE)
-                        sender =
-                            generalSenderRegex.find(text)?.groupValues?.getOrNull(1)?.trim() ?: ""
+                    if (sender == null) {
+                        val senderRegex = """Vous avez reçu\s+\d+(?:\.\d+)?F\s+[dD]e\s+([^\.]+)""".toRegex(RegexOption.IGNORE_CASE)
+                        sender = senderRegex.find(text)?.groupValues?.getOrNull(1)?.trim()
                     }
 
-                    // Format sender name if it contains stars or parentheses
+                    if (sender == null) {
+                        val generalSenderRegex = """[dD]e\s+([^\.]+)""".toRegex(RegexOption.IGNORE_CASE)
+                        sender = generalSenderRegex.find(text)?.groupValues?.getOrNull(1)?.trim()
+                    }
+
+                    sender = sender ?: ""
+
                     if (sender.contains("*") || sender.contains("(")) {
                         sender = formatUsername(sender)
                     } else if (sender.matches("""^\d+.*""".toRegex())) {
-                        // Handle numeric sender names (like "781234567 Diallo")
                         val parts = sender.split(" ", limit = 2)
                         val numberPart = parts[0]
                         val namePart = if (parts.size > 1) " " + parts[1] else ""
@@ -1165,42 +1098,39 @@ class TTSService @Inject constructor(
                         }
                     }
 
-                    return "Wave: $title. Vous avez reçu $extractedAmount , Franc C F A ....de $sender"
+                    return "Wave: Transfert reçu. Vous avez reçu $extractedAmount Francs CFA de $sender"
                 }
 
-                // For "Transfert réussi" - directly extract recipient name using a more specific pattern
-                else if (title.contains("Transfert réussi", ignoreCase = true) ||
-                    title.contains("Transfert envoyé", ignoreCase = true)
-                ) {
-                    // Extract recipient name using a pattern that won't match timestamps
-                    val recipientRegex =
-                        """A\s+([^0-9\s\(\)\.;:]+(?:\s+[^0-9\s\(\)\.;:]+)*)""".toRegex()
-                    val recipient =
-                        recipientRegex.find(text)?.groupValues?.getOrNull(1)?.trim() ?: ""
+                else if (isTransferSent) {
+                    val recipientEnRegex = """To\s+([^(]+)(?:\s*\()?""".toRegex(RegexOption.IGNORE_CASE)
+                    var recipient = recipientEnRegex.find(text)?.groupValues?.getOrNull(1)?.trim()
+
+                    if (recipient == null) {
+                        val recipientRegex = """A\s+([^0-9\s\(\)\.;:]+(?:\s+[^0-9\s\(\)\.;:]+)*)""".toRegex()
+                        recipient = recipientRegex.find(text)?.groupValues?.getOrNull(1)?.trim()
+                    }
+
+                    recipient = recipient ?: ""
 
                     return if (recipient.isNotEmpty()) {
-                        "Wave: $title. Vous avez envoyé $extractedAmount , Franc C F A... à $recipient"
+                        "Wave: Transfert envoyé. Vous avez envoyé $extractedAmount Francs CFA à $recipient"
                     } else {
-                        "Wave: $title. Vous avez envoyé $extractedAmount , Franc C F A"
+                        "Wave: Transfert envoyé. Vous avez envoyé $extractedAmount Francs CFA"
                     }
                 }
 
-                // For other Wave Personal notifications
                 else {
-                    return when {
-                        title.contains("Paiement réussi", ignoreCase = true) ->
-                            "Wave: $title. Vous avez payé $extractedAmount , Franc C F A"
-
-                        else -> "Wave: $title. $extractedAmount , Franc C F A"
+                    return if (isPayment) {
+                        "Wave: Paiement réussi. Vous avez payé $extractedAmount Francs CFA"
+                    } else {
+                        "Wave: $title. $extractedAmount Francs CFA"
                     }
                 }
             }
         }
 
-        // DEFAULT FALLBACK - use standard format
         val title = notification.title
 
-        // Clean text - remove anything after balance information
         val cleanedText = when {
             notification.text.contains("Votre nouveau solde", ignoreCase = true) ->
                 notification.text.split("Votre nouveau solde", ignoreCase = true)[0].trim()
@@ -1219,7 +1149,7 @@ class TTSService @Inject constructor(
         val builder = StringBuilder("$appName: $title. ")
 
         if (formattedAmount.isNotEmpty()) {
-            builder.append("$formattedAmount , Franc C F A")
+            builder.append("$formattedAmount , Francs CFA")
 
             if (notification.label != null) {
                 builder.append(" pour ${notification.label}")
@@ -1231,18 +1161,14 @@ class TTSService @Inject constructor(
         return builder.toString()
     }
 
-    // Format usernames with stars or parentheses
     private fun formatUsername(username: String): String {
-        // Handle cases with parentheses - like "Fofana Cisse (78****79)" or "Fofana Cisse (781234567)"
         if (username.contains("(")) {
             val parts = username.split("(", limit = 2)
             val name = parts[0].trim()
 
-            // If there's content in parentheses, format it
             if (parts.size > 1) {
                 val parenthesisContent = parts[1].replace(")", "").trim()
 
-                // If the content has stars, format as usual
                 if (parenthesisContent.contains("*")) {
                     val firstDigitsMatch = """^(\d+)\*+""".toRegex().find(parenthesisContent)
                     val lastDigitsMatch = """\*+(\d+)$""".toRegex().find(parenthesisContent)
@@ -1253,29 +1179,23 @@ class TTSService @Inject constructor(
                         return "$name, $firstDigits étoile $lastDigits"
                     }
                 }
-                // If it's a full phone number (9 digits)
                 else if (parenthesisContent.matches("""^\d{9,}$""".toRegex())) {
                     val first2 = parenthesisContent.take(2)
                     val last2 = parenthesisContent.takeLast(2)
                     return "$name, $first2 étoile $last2"
                 }
 
-                // Otherwise, just return the name part
                 return name
             }
 
-            // If no parenthesis content, just return the name
             return name
         }
 
-        // Handle direct phone numbers with stars
         else if (username.contains("*")) {
-            // Split the username to get parts
             val parts = username.split(" ", limit = 2)
             val phoneOrStars = parts[0]
             val namePart = if (parts.size > 1) " " + parts[1] else ""
 
-            // Extract first digits before stars and last digits after stars
             val firstDigitsMatch = """^(\d+)\*+""".toRegex().find(phoneOrStars)
             val lastDigitsMatch = """\*+(\d+)$""".toRegex().find(phoneOrStars)
 
@@ -1285,11 +1205,9 @@ class TTSService @Inject constructor(
                 return "$firstDigits étoile $lastDigits$namePart"
             }
 
-            // Simplify handling if we can't find exact pattern
             return phoneOrStars.replace("*", " étoile ") + namePart
         }
 
-        // For numeric usernames (like full phone numbers)
         else if (username.matches("""^\d{7,}.*$""".toRegex())) {
             val parts = username.split(" ", limit = 2)
             val numberPart = parts[0]
@@ -1302,22 +1220,17 @@ class TTSService @Inject constructor(
             }
         }
 
-        // No transformation needed
         return username
     }
 
-    // Extract recipient from notification text
     private fun extractRecipient(text: String): String {
-        // Extract for transfers ("A") - Uppercase A without accent, which is used for recipient
         val transferRegex = """A\s+([^0-9\s\(\)\.;:]+(?:\s+[^0-9\s\(\)\.;:]+)*)""".toRegex()
         transferRegex.find(text)?.groupValues?.getOrNull(1)?.trim()?.let {
             return it
         }
 
-        // If the above didn't match, try a more general approach but avoid timestamps
         val generalRegex = """[àÀaA]\s+([^0-9\s\(\)\.;:]+(?:\s+[^0-9\s\(\)\.;:]+)*)""".toRegex()
         generalRegex.find(text)?.groupValues?.getOrNull(1)?.trim()?.let {
-            // Additional check to avoid timestamp matches
             if (!it.contains("h") && it.length > 1) {
                 return it
             }
@@ -1331,9 +1244,7 @@ class TTSService @Inject constructor(
         tts?.shutdown()
     }
 
-    // Add this to your TTSService class
     fun speakText(text: String) {
-        // Use existing TTS engine to speak the provided text
         tts?.speak(
             text,
             TextToSpeech.QUEUE_FLUSH,
@@ -1342,9 +1253,6 @@ class TTSService @Inject constructor(
         )
     }
 
-
-    // Dans TTSService.kt, modifiez les Log.d en Log.e
-    // Dans TTSService.kt - Gardez cette méthode telle quelle
     fun testWolofMedia() {
         Log.e("KUFAY_TTS", "===== TESTING WOLOF MEDIA =====")
         try {
@@ -1367,5 +1275,4 @@ class TTSService @Inject constructor(
             e.printStackTrace()
         }
     }
-
 }
