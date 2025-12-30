@@ -38,6 +38,10 @@ class NotificationRepository @Inject constructor(
     suspend fun saveNotification(notification: Notification): Long =
         notificationDao.insert(notification)
 
+    suspend fun getNotificationById(id: Long): Notification? {
+        return notificationDao.getNotificationById(id)
+    }
+
     suspend fun isDuplicate(
         packageName: String,
         amount: Double,
