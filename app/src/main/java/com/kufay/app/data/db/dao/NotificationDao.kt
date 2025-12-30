@@ -149,4 +149,29 @@ interface NotificationDao {
 
     @Query("SELECT * FROM notifications WHERE appTag = :appTag AND isDeleted = 0 ORDER BY timestamp DESC")
     fun getNotificationsByAppTag(appTag: String): Flow<List<Notification>>
+
+    @Query("""
+        SELECT COUNT(*) FROM notifications 
+        WHERE packageName = :packageName 
+        AND amount = :amount 
+        AND timestamp BETWEEN :timestampStart AND :timestampEnd
+        AND isDeleted = 0
+    """)
+    suspend fun checkDuplicate(
+        packageName: String,
+        amount: Double,
+        timestampStart: Long,
+        timestampEnd: Long
+    ): Int
+
+    @Query("""
+        SELECT COUNT(*) FROM notifications 
+        WHERE packageName = :packageName 
+        AND text LIKE '%' || :ref || '%'
+        AND isDeleted = 0
+    """)
+    suspend fun checkDuplicateByRef(
+        packageName: String,
+        ref: String
+    ): Int
 }
