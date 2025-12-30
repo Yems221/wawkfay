@@ -44,7 +44,6 @@ class KufayNotificationListenerService : NotificationListenerService() {
     @Inject
     lateinit var userPreferences: UserPreferences
 
-    // ✅ AJOUT : Injection du KufayNotificationManager
     @Inject
     lateinit var kufayNotificationManager: KufayNotificationManager
 
@@ -95,14 +94,12 @@ class KufayNotificationListenerService : NotificationListenerService() {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                // Android 14+ (API 34)
                 startForeground(
                     FOREGROUND_NOTIFICATION_ID,
                     createForegroundNotification(),
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
                 )
             } else {
-                // Toutes les versions antérieures
                 startForeground(FOREGROUND_NOTIFICATION_ID, createForegroundNotification())
             }
             Log.d("KUFAY_SERVICE", "Foreground service started successfully")
@@ -162,20 +159,34 @@ class KufayNotificationListenerService : NotificationListenerService() {
         val (amount, currency, labelPair) = notificationUtils.extractFinancialData(packageName, title, text)
         val (amountText, label) = labelPair
 
+        // ✅ MODIFICATION: Détection transactions entrantes (FRANÇAIS + ANGLAIS)
         val isIncomingTransaction = when {
+            // WAVE PERSONAL - FRANÇAIS
             packageName == "com.wave.personal" &&
                     text.contains("avez reçu", ignoreCase = true) -> true
+
+            // ✅ NEW: WAVE PERSONAL - ANGLAIS
+            packageName == "com.wave.personal" &&
+                    (text.contains("You received", ignoreCase = true) ||
+                            title.contains("Transfer received", ignoreCase = true)) -> true
+
+            // WAVE BUSINESS - FRANÇAIS
             packageName == "com.wave.business" &&
                     (text.contains("votre encaissement de", ignoreCase = true) ||
                             text.contains("reçu", ignoreCase = true)) -> true
+
+            // ORANGE MONEY - FRANÇAIS
             packageName == "com.google.android.apps.messaging" &&
                     title.contains("OrangeMoney", ignoreCase = true) &&
                     (text.contains("recu", ignoreCase = true) ||
                             text.contains("reçu", ignoreCase = true)) -> true
+
+            // MIXX BY YAS - FRANÇAIS
             packageName == "com.google.android.apps.messaging" &&
                     title.contains("Mixx by Yas", ignoreCase = true) &&
                     (text.contains("recu", ignoreCase = true) ||
                             text.contains("reçu", ignoreCase = true)) -> true
+
             else -> false
         }
 
@@ -206,7 +217,6 @@ class KufayNotificationListenerService : NotificationListenerService() {
             val isDuplicate = if (packageName == "com.google.android.apps.messaging" &&
                 title.contains("Mixx by Yas", ignoreCase = true)) {
 
-                // Check by Ref (unique transaction ID)
                 val hasDuplicateRef = notificationRepository.isDuplicateByRef(
                     packageName = packageName,
                     text = text
@@ -216,7 +226,6 @@ class KufayNotificationListenerService : NotificationListenerService() {
                     Log.d("KUFAY_SERVICE", "🚫 DOUBLON MIXX DÉTECTÉ (Ref identique) - notification ignorée")
                     true
                 } else {
-                    // Fallback: check by amount + time window
                     amount?.let { validAmount ->
                         notificationRepository.isDuplicate(
                             packageName = packageName,
@@ -227,7 +236,6 @@ class KufayNotificationListenerService : NotificationListenerService() {
                     } ?: false
                 }
             } else {
-                // Pour autres apps: check normal par montant + timestamp
                 amount?.let { validAmount ->
                     notificationRepository.isDuplicate(
                         packageName = packageName,
@@ -251,12 +259,15 @@ class KufayNotificationListenerService : NotificationListenerService() {
             Log.d("KUFAY_SERVICE", "Is incoming transaction: $isIncomingTransaction")
             Log.d("KUFAY_SERVICE", "App Tag: $appTag")
 
-            // ✅ AJOUT : Afficher la notification Kufay dans la barre de notification
             kufayNotificationManager.showKufayNotification(kufayNotification, notificationId)
             Log.d("KUFAY_SERVICE", "📱 Notification Kufay affichée dans la barre (ID: $notificationId)")
 
             val autoReadEnabled = userPreferences.autoReadEnabled.first()
 
+            // ✅ Vocalisation automatique SI:
+            // - Auto-read activé
+            // - Pattern reconnu
+            // - Transaction ENTRANTE (français OU anglais)
             if (autoReadEnabled && isRecognizedPattern && isIncomingTransaction) {
                 ttsService.speakNotification(kufayNotification, isRecognizedPattern)
             }
